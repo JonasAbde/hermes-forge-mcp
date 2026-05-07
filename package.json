@@ -1,0 +1,23 @@
+{
+  "name": "hermes-forge-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Hermes Forge — AI agent platform API integration",
+  "type": "module",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "dev": "tsx src/index.ts",
+    "inspect": "npx @modelcontextprotocol/inspector node build/index.js"
+  },
+  "keywords": ["mcp", "hermes-forge", "ai-agents", "model-context-protocol"],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

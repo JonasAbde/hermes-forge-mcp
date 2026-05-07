@@ -1,0 +1,6 @@
+node_modules/
+build/
+.env
+forge.env
+*.log
+.DS_Store
