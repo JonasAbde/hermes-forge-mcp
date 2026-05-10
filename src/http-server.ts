@@ -62,12 +62,14 @@ function loadConfig(): ForgeConfig {
   };
 }
 
-const PORT = parseInt(process.env.MCP_HTTP_PORT ?? "8642", 10);
+const PORT = parseInt(process.env.MCP_HTTP_PORT ?? "8641", 10);
 const CONFIG = loadConfig();
 
 /** Tool names exposed by this MCP server — used by /health/tools and CLI status.
  *  Keep in sync with the tools in ListToolsRequestSchema handler below. */
 const MCP_TOOLS: Array<{ name: string; description: string }> = [
+  { name: "forge_list_packs", description: "List packs from the Forge catalog" },
+  { name: "forge_get_pack", description: "Get details for a single pack" },
   { name: "open_pack", description: "Open/reveal a new agent from a pack" },
   { name: "chat_with_agent", description: "Send a message to an agent in a chat session" },
   { name: "fuse_agents", description: "Fuse two agents together (Synthesis)" },
@@ -326,6 +328,49 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
+        name: "forge_list_packs",
+        description:
+          "List Agent Packs from the Forge catalog. Optionally filter by query, theme, or sort order.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            catalogOnly: {
+              type: "boolean",
+              description: "If true, only return catalog-eligible packs",
+              default: true,
+            },
+            sort: {
+              type: "string",
+              description: "Sort order: trust-desc, trust-asc, or name-asc",
+              default: "trust-desc",
+            },
+            query: {
+              type: "string",
+              description: "Optional substring search query",
+            },
+            theme: {
+              type: "string",
+              description: "Optional exact card theme filter",
+            },
+          },
+        },
+      },
+      {
+        name: "forge_get_pack",
+        description:
+          "Get full details for a single Agent Pack by ID. Use forge_list_packs to discover pack IDs.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            packId: {
+              type: "string",
+              description: "The pack ID (e.g., 'hermes-agent')",
+            },
+          },
+          required: ["packId"],
+        },
+      },
+      {
         name: "open_pack",
         description:
           "Open/reveal a new agent from a pack. Creates an agent in your collection with random stat rolls. Requires authentication.",
@@ -470,6 +515,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   switch (name) {
+    // ── forge_list_packs ─────────────────────────────────────────
+    case "forge_list_packs": {
+      const catalogOnly = args?.catalogOnly !== false;
+      const sort = String(args?.sort ?? "trust-desc");
+      const query = String(args?.query ?? "").trim();
+      const theme = String(args?.theme ?? "").trim();
+
+      const params = new URLSearchParams();
+      params.set("sort", sort);
+      if (catalogOnly) params.set("catalog", "1");
+      if (query) params.set("q", query);
+      if (theme) params.set("theme", theme);
+
+      const data = await forgeFetch(`/packs?${params.toString()}`);
+      const packs = (data as Record<string, unknown>)?.packs as unknown[] | undefined;
+      const count = packs?.length ?? 0;
+
+      return {
+        content: [
+          jsonContent(data),
+          textContent(`📦 Listed ${count} packs from Forge catalog. Use forge_get_pack for details on a specific pack.`),
+        ],
+      };
+    }
+
+    // ── forge_get_pack ───────────────────────────────────────────
+    case "forge_get_pack": {
+      const packId = String(args?.packId ?? "");
+      if (!packId) throw new Error("packId is required");
+
+      const data = await forgeFetch(`/packs/${encodeURIComponent(packId)}`);
+
+      return {
+        content: [
+          jsonContent(data),
+          textContent(`📦 Retrieved details for pack "${packId}".`),
+        ],
+      };
+    }
+
     // ── open_pack ──────────────────────────────────────────────────
     case "open_pack": {
       requireAuth("open_pack");

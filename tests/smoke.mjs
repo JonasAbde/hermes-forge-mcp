@@ -111,11 +111,11 @@ async function main() {
   const toolRes = await sendRequest("tools/list");
   const tools = toolRes.result?.result?.tools;
   check(Array.isArray(tools), "tools is an array");
-  check(tools.length === 7, "exactly 7 tools");
+  check(tools.length === 9, "exactly 9 tools");
 
   const toolNames = tools.map((t) => t.name);
   const expectedTools = [
-    "open_pack", "chat_with_agent", "fuse_agents",
+    "forge_list_packs", "forge_get_pack", "open_pack", "chat_with_agent", "fuse_agents",
     "get_xp", "subscribe_tier", "deploy_agent_to_telegram", "get_magic_link",
   ];
   for (const name of expectedTools) {

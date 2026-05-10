@@ -1,0 +1,19 @@
+[Unit]
+Description=Hermes Forge MCP Server (HTTP Transport)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/projects/hermes-forge-mcp
+Environment=NODE_ENV=production
+Environment=MCP_HTTP_PORT=8641
+Environment=FORGE_API_BASE_URL=https://forge.tekup.dk/api/forge
+ExecStart=/usr/bin/node build/http-server.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

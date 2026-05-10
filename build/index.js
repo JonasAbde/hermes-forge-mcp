@@ -1,27 +1,21 @@
 /**
  * Forge MCP — Model Context Protocol server for the Hermes Forge Platform.
  *
- * Exposes the Forge API (packs, agents, chat, fusion, deployment) to any
- * MCP-compatible client: Claude Desktop, Cursor, Windsurf, and others.
+ * Exposes the Forge API (packs, chat, auth) to any MCP-compatible client:
+ * Claude Desktop, Cursor, Windsurf, and others.
  *
  * Resources:
  *   forge://packs           — List all Agent Packs
- *   forge://agents          — List user's collected agents
  *   forge://user/profile    — Get authenticated user profile
  *
  * Tools:
- *   open_pack               — Open/reveal a new agent from a pack
- *   chat_with_agent         — Chat with an agent in a session
- *   fuse_agents             — Fuse two agents (synthesis)
- *   get_xp                  — Get XP/level info for an agent
- *   subscribe_tier          — Get subscription tier info
- *   deploy_agent_to_telegram — Deploy an agent to Telegram webhook
+ *   forge_list_packs        — List packs from the Forge catalog
+ *   forge_get_pack          — Get details for a single pack
+ *   chat_with_agent         — Chat in a Forge session
  *   get_magic_link          — Request a magic link for email auth
  *
  * Prompts:
- *   agent_card              — Generate an agent card overview
  *   pack_summary            — Summarize an Agent Pack
- *   fusion_guide            — Guide to agent fusion mechanics
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -251,43 +245,81 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
         tools: [
             {
+                name: "forge_list_packs",
+                description: "List Agent Packs from the Forge catalog. Optionally filter by query, theme, or sort order.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        catalog_only: {
+                            type: "boolean",
+                            description: "If true, only return catalog-eligible packs",
+                            default: true,
+                        },
+                        sort: {
+                            type: "string",
+                            description: "Sort order: trust-desc, trust-asc, or name-asc",
+                            default: "trust-desc",
+                        },
+                        query: {
+                            type: "string",
+                            description: "Optional substring search query",
+                        },
+                        theme: {
+                            type: "string",
+                            description: "Optional exact card theme filter",
+                        },
+                    },
+                },
+            },
+            {
+                name: "forge_get_pack",
+                description: "Get full details for a single Agent Pack by ID. Use forge_list_packs to discover pack IDs.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        pack_id: {
+                            type: "string",
+                            description: "The pack ID (e.g., 'hermes-agent')",
+                        },
+                    },
+                    required: ["pack_id"],
+                },
+            },
+            {
                 name: "open_pack",
                 description: "Open/reveal a new agent from a pack. Creates an agent in your collection with random stat rolls. Requires authentication.",
                 inputSchema: {
                     type: "object",
                     properties: {
-                        packId: {
+                        pack_id: {
                             type: "string",
-                            description: "The pack ID to open (e.g., 'hermes-agent', 'code-assistant'). Discover available packs via the forge://packs resource.",
+                            description: "The pack ID to open (e.g., 'hermes-agent')",
                         },
                     },
-                    required: ["packId"],
+                    required: ["pack_id"],
                 },
             },
             {
                 name: "chat_with_agent",
-                description: "Send a message to an agent in a chat session. Auto-rewards 25 XP. Requires authentication.",
+                description: "Send a message in a Forge chat session. Creates a new session if none is provided. Requires authentication.",
                 inputSchema: {
                     type: "object",
                     properties: {
-                        agentId: {
-                            type: "string",
-                            description: "The ID of the agent to chat with",
-                        },
                         message: {
                             type: "string",
                             description: "The message content to send",
                         },
-                        sessionId: {
+                        session_id: {
                             type: "string",
-                            description: "Optional: existing session ID to continue a conversation. If omitted, a new session is created.",
+                            description: "Optional: existing Forge session ID. If omitted, a new session is created.",
                         },
-                        model: {
+                        title: {
                             type: "string",
-                            description: "Optional: the model to use (defaults to the agent's pack model)",
+                            description: "Optional: session title (used when creating a new session)",
+                            default: "MCP Chat Session",
                         },
                     },
-                    required: ["agentId", "message"],
+                    required: ["message"],
                 },
             },
             {
@@ -296,16 +328,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 inputSchema: {
                     type: "object",
                     properties: {
-                        baseAgentId: {
+                        base_agent_id: {
                             type: "string",
-                            description: "The ID of the base agent (survives on success)",
+                            description: "The base agent ID to keep and upgrade",
                         },
-                        fodderAgentId: {
+                        fodder_agent_id: {
                             type: "string",
-                            description: "The ID of the fodder/sacrifice agent (consumed)",
+                            description: "The fodder agent ID to consume (sacrificed)",
                         },
                     },
-                    required: ["baseAgentId", "fodderAgentId"],
+                    required: ["base_agent_id", "fodder_agent_id"],
                 },
             },
             {
@@ -314,12 +346,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 inputSchema: {
                     type: "object",
                     properties: {
-                        agentId: {
+                        agent_id: {
                             type: "string",
-                            description: "The ID of the agent to query",
+                            description: "The agent ID to query",
                         },
                     },
-                    required: ["agentId"],
+                    required: ["agent_id"],
                 },
             },
             {
@@ -327,38 +359,39 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 description: "Get subscription tier and usage limits for the authenticated user. Requires authentication.",
                 inputSchema: {
                     type: "object",
-                    properties: {},
+                    properties: {
+                        user_id: {
+                            type: "string",
+                            description: "Optional: user ID (defaults to authenticated user)",
+                        },
+                    },
                 },
             },
             {
                 name: "deploy_agent_to_telegram",
-                description: "Deploy an agent to Telegram by creating a webhook. ⚠️ Requires authentication and a Telegram bot token from @BotFather. Never logs or stores the token — only used for the API call. Provide a secret or one is generated automatically.",
+                description: "Deploy an agent to Telegram by creating a webhook. Requires authentication and a Telegram bot token from @BotFather.",
                 inputSchema: {
                     type: "object",
                     properties: {
-                        agentId: {
+                        agent_id: {
                             type: "string",
-                            description: "The ID of the agent to deploy",
+                            description: "The agent ID to deploy",
                         },
-                        telegramBotToken: {
+                        bot_token: {
                             type: "string",
-                            description: "The Telegram bot token from @BotFather",
+                            description: "Telegram bot token from @BotFather",
                         },
                         secret: {
                             type: "string",
-                            description: "Optional: a secret string for webhook verification (min 16 chars). If omitted, a 32-char random secret is generated automatically.",
-                        },
-                        webhookUrl: {
-                            type: "string",
-                            description: "Optional: custom webhook URL. Defaults to the Forge webhook endpoint.",
+                            description: "Optional: webhook secret (auto-generated if omitted)",
                         },
                     },
-                    required: ["agentId", "telegramBotToken"],
+                    required: ["agent_id", "bot_token"],
                 },
             },
             {
                 name: "get_magic_link",
-                description: "Request a magic link for email-based authentication. Does not require a PAT or API key — use this to authenticate via email.",
+                description: "Request a magic link for email-based authentication. Does not require a PAT or API key.",
                 inputSchema: {
                     type: "object",
                     properties: {
@@ -380,12 +413,47 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     switch (name) {
-        // ── open_pack ──────────────────────────────────────────────────
+        // ── forge_list_packs ────────────────────────────────────────
+        case "forge_list_packs": {
+            const catalogOnly = args?.catalog_only !== false;
+            const sort = String(args?.sort ?? "trust-desc");
+            const query = String(args?.query ?? "").trim();
+            const theme = String(args?.theme ?? "").trim();
+            const params = new URLSearchParams();
+            params.set("sort", sort);
+            if (catalogOnly)
+                params.set("catalog", "1");
+            if (query)
+                params.set("q", query);
+            if (theme)
+                params.set("theme", theme);
+            const data = await forgeFetch(`/packs?${params.toString()}`);
+            return {
+                content: [
+                    jsonContent(data),
+                    textContent(`📦 Listed packs from Forge catalog. Use forge_get_pack for details on a specific pack.`),
+                ],
+            };
+        }
+        // ── forge_get_pack ──────────────────────────────────────────
+        case "forge_get_pack": {
+            const packId = String(args?.pack_id ?? "");
+            if (!packId)
+                throw new Error("pack_id is required");
+            const data = await forgeFetch(`/packs/${encodeURIComponent(packId)}`);
+            return {
+                content: [
+                    jsonContent(data),
+                    textContent(`📦 Retrieved details for pack "${packId}".`),
+                ],
+            };
+        }
+        // ── open_pack ───────────────────────────────────────────────
         case "open_pack": {
             requireAuth("open_pack");
-            const packId = String(args?.packId ?? "");
+            const packId = String(args?.pack_id ?? "");
             if (!packId)
-                throw new Error("packId is required");
+                throw new Error("pack_id is required");
             const data = await forgeFetch("/v1/agents", {
                 method: "POST",
                 body: JSON.stringify({ packId }),
@@ -400,12 +468,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // ── chat_with_agent ───────────────────────────────────────────
         case "chat_with_agent": {
             requireAuth("chat_with_agent");
-            const agentId = String(args?.agentId ?? "");
             const message = String(args?.message ?? "");
-            const sessionId = args?.sessionId ? String(args.sessionId) : undefined;
-            const model = args?.model ? String(args.model) : undefined;
-            if (!agentId)
-                throw new Error("agentId is required");
+            const sessionId = args?.session_id ? String(args.session_id) : undefined;
+            const title = String(args?.title ?? "MCP Chat Session");
             if (!message)
                 throw new Error("message is required");
             let sid = sessionId;
@@ -414,9 +479,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const sessionRes = await forgeFetch("/v1/chat/sessions", {
                     method: "POST",
                     body: JSON.stringify({
-                        agentId,
-                        model: model ?? agentId,
-                        title: `Chat with ${agentId}`,
+                        title,
+                        metadata: { source: "mcp" },
                     }),
                 });
                 sid = sessionRes.id;
@@ -426,34 +490,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 method: "POST",
                 body: JSON.stringify({ role: "user", content: message }),
             });
-            // Get session with messages
-            const session = await forgeFetch(`/v1/chat/sessions/${sid}`);
+            // Get messages
+            const messagesData = await forgeFetch(`/v1/chat/sessions/${sid}/messages`);
             return {
                 content: [
                     jsonContent({
-                        sessionId: sid,
+                        session_id: sid,
                         message: msgRes,
-                        session,
+                        messages: messagesData,
                     }),
-                    textContent(`💬 Message sent to agent ${agentId} (session: ${sid}). 25 XP rewarded!`),
+                    textContent(`💬 Message sent (session: ${sid}).`),
                 ],
             };
         }
-        // ── fuse_agents ─────────────────────────────────────────────
+        // ── fuse_agents ────────────────────────────────────────────
         case "fuse_agents": {
             requireAuth("fuse_agents");
-            const baseAgentId = String(args?.baseAgentId ?? "");
-            const fodderAgentId = String(args?.fodderAgentId ?? "");
+            const baseAgentId = String(args?.base_agent_id ?? "");
+            const fodderAgentId = String(args?.fodder_agent_id ?? "");
             if (!baseAgentId)
-                throw new Error("baseAgentId is required");
+                throw new Error("base_agent_id is required");
             if (!fodderAgentId)
-                throw new Error("fodderAgentId is required");
+                throw new Error("fodder_agent_id is required");
             const data = await forgeFetch("/v1/synthesis/fuse", {
                 method: "POST",
-                body: JSON.stringify({
-                    baseAgentId,
-                    fodderAgentId,
-                }),
+                body: JSON.stringify({ baseAgentId, fodderAgentId }),
             });
             const result = data.result;
             const isSuccess = result === "success";
@@ -465,12 +526,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 ],
             };
         }
-        // ── get_xp ────────────────────────────────────────────────
+        // ── get_xp ─────────────────────────────────────────────────
         case "get_xp": {
             requireAuth("get_xp");
-            const agentIdXp = String(args?.agentId ?? "");
+            const agentIdXp = String(args?.agent_id ?? "");
             if (!agentIdXp)
-                throw new Error("agentId is required");
+                throw new Error("agent_id is required");
             const agent = await forgeFetch(`/v1/agents/${agentIdXp}`);
             return {
                 content: [
@@ -479,7 +540,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 ],
             };
         }
-        // ── subscribe_tier ─────────────────────────────────────────
+        // ── subscribe_tier ──────────────────────────────────────────
         case "subscribe_tier": {
             requireAuth("subscribe_tier");
             const data = await forgeFetch("/v1/me/tier");
@@ -490,25 +551,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 ],
             };
         }
-        // ── deploy_agent_to_telegram ───────────────────────────────────
+        // ── deploy_agent_to_telegram ─────────────────────────────────
         case "deploy_agent_to_telegram": {
             requireAuth("deploy_agent_to_telegram");
-            const depAgentId = String(args?.agentId ?? "");
-            const botToken = String(args?.telegramBotToken ?? "");
-            const customUrl = args?.webhookUrl ? String(args.webhookUrl) : undefined;
+            const depAgentId = String(args?.agent_id ?? "");
+            const botToken = String(args?.bot_token ?? "");
             const providedSecret = args?.secret ? String(args.secret) : undefined;
             if (!depAgentId)
-                throw new Error("agentId is required");
+                throw new Error("agent_id is required");
             if (!botToken)
-                throw new Error("telegramBotToken is required");
+                throw new Error("bot_token is required");
             if (providedSecret && providedSecret.length < 16) {
                 throw new Error("secret must be at least 16 characters long");
             }
-            // Use provided secret or generate a random 32-char hex string
             const webhookSecret = providedSecret ?? crypto.randomBytes(32).toString("hex");
-            // Step 1: Create a Forge webhook for this agent
-            const targetUrl = customUrl ??
-                `${CONFIG.baseUrl.replace("/api/forge", "")}/api/forge/v1/webhooks/telegram`;
+            const targetUrl = `${CONFIG.baseUrl.replace("/api/forge", "")}/api/forge/v1/webhooks/telegram`;
             const webhookRes = await forgeFetch("/v1/webhooks", {
                 method: "POST",
                 body: JSON.stringify({
@@ -518,27 +575,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 }),
             });
             const webhookId = webhookRes.id;
-            // Step 2: Set Telegram webhook to point to Forge
-            const tgWebhookUrl = `https://api.telegram.org/bot${botToken}/setWebhook`;
-            const tgRes = await fetch(tgWebhookUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    url: `${CONFIG.baseUrl}/v1/chat/sessions?agentId=${depAgentId}`,
-                    allowed_updates: ["message"],
-                }),
-            });
-            const tgData = await tgRes.json();
             return {
                 content: [
-                    jsonContent({
-                        webhook: webhookRes,
-                        telegram: tgData,
-                        agentId: depAgentId,
-                        // Only expose a masked version of the bot token in the response
-                        botToken: maskToken(botToken, 12),
-                    }),
-                    textContent(`🤖 Agent ${depAgentId} deployed to Telegram! Webhook created (${webhookId}). Telegram webhook ${tgData.ok ? "configured successfully ✅" : "failed ❌"}.`),
+                    jsonContent(webhookRes),
+                    textContent(`🚀 Agent ${depAgentId} deployed to Telegram!\nWebhook ID: ${webhookId}\nSecret: ${webhookSecret.slice(0, 8)}...`),
                 ],
             };
         }
@@ -616,36 +656,66 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
             const agentId = String(args?.agentId ?? "");
             if (!agentId)
                 throw new Error("agentId is required");
-            const agent = await forgeFetch(`/v1/agents/${agentId}`);
-            const agentData = agent.agent ?? agent;
-            const name_ = agentData.name ?? "Unknown";
-            const level = agentData.level ?? 1;
-            const currentXp = agentData.current_xp ?? 0;
-            const requiredXp = agentData.level_progress?.required_xp ?? 100;
-            const rarity = agentData.rarity ?? "common";
-            const strength = agentData.strength ?? 0;
-            const speed = agentData.speed ?? 0;
-            const fusionCount = agentData.fusion_count ?? 0;
-            const packId = agentData.pack_id ?? "unknown";
+            const data = await forgeFetch(`/v1/agents/${agentId}`);
+            const d = data;
+            const agent = (d.agent ?? {});
             return {
                 messages: [
                     {
                         role: "user",
                         content: {
                             type: "text",
-                            text: `## 🃏 Agent Card: ${name_}
+                            text: `## 🎴 Agent Card: ${String(agent.name ?? agentId)}
 
-**Pack:** ${packId}
-**Rarity:** ${rarity.toUpperCase()}
-**Level:** ${level}
-**XP:** ${currentXp} / ${requiredXp} (${Math.round((currentXp / requiredXp) * 100)}% to next level)
-**Stats:** ⚔️ Strength ${strength} | 💨 Speed ${speed}
-**Fusions:** ${fusionCount}
+**ID:** ${agentId}
+**Level:** ${String(agent.level ?? "N/A")}
+**XP:** ${String(agent.xp ?? "N/A")}
+**Rarity:** ${String(agent.rarity_label ?? "N/A")}
+**Stats:** ${JSON.stringify(agent.stats ?? {}, null, 2)}
 
-**Tips:**
-- Chat with this agent to earn 25 XP per message
-- Fuse with other agents for stat boosts (85% success rate)
-- Higher rarity = better stat growth potential`,
+**Fusion History:**
+${(agent.fusion_history ?? []).join("\n") || "No fusions yet."}`,
+                        },
+                    },
+                ],
+            };
+        }
+        case "fusion_guide": {
+            const baseAgentId = String(args?.baseAgentId ?? "");
+            const fodderAgentId = String(args?.fodderAgentId ?? "");
+            let extraContext = "";
+            if (baseAgentId) {
+                try {
+                    const data = await forgeFetch(`/v1/agents/${baseAgentId}`);
+                    const d = data;
+                    const agent = (d.agent ?? {});
+                    extraContext += `\n\n**Base Agent (${baseAgentId}):**\n- Level: ${String(agent.level ?? "N/A")}\n- XP: ${String(agent.xp ?? "N/A")}\n- Stats: ${JSON.stringify(agent.stats ?? {})}`;
+                }
+                catch { /* ignore */ }
+            }
+            return {
+                messages: [
+                    {
+                        role: "user",
+                        content: {
+                            type: "text",
+                            text: `## ⚡ Agent Fusion Guide
+
+Fusion combines two agents: a **base** (kept) and a **fodder** (consumed).
+
+**Success Rate:** 85%
+- Base agent gains XP and level
+- Stat bonuses based on fodder rarity
+
+**Core Fracture (15%):**
+- Base agent resets to level 1
+- All XP lost
+- Fodder still consumed
+
+**Strategy Tips:**
+- Match complementary stat types
+- Higher fodder rarity = bigger bonus
+- Consider risk vs reward before fusing rare agents${extraContext}`,
                         },
                     },
                 ],
@@ -690,62 +760,6 @@ ${(pack.capabilities_json ?? []).map((c) => `- ${c}`).join("\n") || "N/A"}
 **Rating:** ⭐ ${String(rating.avg_rating ?? "N/A")} (${String(rating.total ?? 0)} reviews)
 
 **Docs:** ${String(pack.docs_url ?? "N/A")}`,
-                        },
-                    },
-                ],
-            };
-        }
-        case "fusion_guide": {
-            const baseAgentId = args?.baseAgentId ? String(args.baseAgentId) : undefined;
-            const fodderAgentId = args?.fodderAgentId ? String(args.fodderAgentId) : undefined;
-            let baseInfo = "";
-            let fodderInfo = "";
-            if (baseAgentId) {
-                const base = await forgeFetch(`/v1/agents/${baseAgentId}`);
-                const ba = base.agent ?? base;
-                baseInfo = `\n**Base Agent:** ${ba.name ?? baseAgentId} (Level ${ba.level ?? 1}, ${ba.rarity ?? "common"})`;
-            }
-            if (fodderAgentId) {
-                const fodder = await forgeFetch(`/v1/agents/${fodderAgentId}`);
-                const fa = fodder.agent ?? fodder;
-                fodderInfo = `\n**Fodder Agent:** ${fa.name ?? fodderAgentId} (Level ${fa.level ?? 1}, ${fa.rarity ?? "common"})`;
-            }
-            return {
-                messages: [
-                    {
-                        role: "user",
-                        content: {
-                            type: "text",
-                            text: `## 🔮 Agent Fusion Guide${baseInfo}${fodderInfo}
-
-### Fusion Mechanics
-| Outcome | Chance | Result |
-|---------|--------|--------|
-| ✅ **Success** | 85% | Base agent gains +1 level + bonus XP from fodder's level |
-| 💥 **Core Fracture** | 15% | Base agent resets to level 1, 0 XP (keeps stats + fusion count) |
-
-### Success Bonus XP
-Bonus XP = ceil(fodder_level / 2) × 25
-
-### Strategy Tips
-1. **Level up fodder first** — higher level fodder = more bonus XP on success
-2. **Risk management** — Core Fracture resets the base but keeps its stats and rarity
-3. **High-value bases** — Fuse into your rarest agents first (they benefit most from stat growth)
-4. **Fodder always consumed** — Choose sacrifice agents wisely
-5. **Fusion count increases** — Each fusion (success or fracture) increments the counter
-
-### Flow
-\`\`\`
-Base Agent + Fodder Agent
-       │
-  ┌────┬────┐
-  ▼         ▼
-Success   Fracture (15%)
-  │         │
-  ▼         ▼
-+1 Level   Level 1, 0 XP
-+Bonus XP  Stats preserved
-\`\`\``,
                         },
                     },
                 ],
