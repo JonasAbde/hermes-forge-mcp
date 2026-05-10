@@ -1,16 +1,18 @@
 {
-  "name": "hermes-forge-mcp",
+  "name": "forge-mcp",
   "version": "1.0.0",
-  "description": "MCP server for Hermes Forge — AI agent platform API integration",
+  "description": "MCP server for the Hermes Forge platform — discover, open, chat with, fuse, and deploy AI Agent Packs via the Model Context Protocol",
   "type": "module",
   "main": "build/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node build/index.js",
     "dev": "tsx src/index.ts",
-    "inspect": "npx @modelcontextprotocol/inspector node build/index.js"
+    "inspect": "npx @modelcontextprotocol/inspector node build/index.js",
+    "test": "node --test tests/",
+    "smoke": "node tests/smoke.mjs"
   },
-  "keywords": ["mcp", "hermes-forge", "ai-agents", "model-context-protocol"],
+  "keywords": ["mcp", "forge", "ai-agents", "model-context-protocol", "hermes-forge"],
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.1"

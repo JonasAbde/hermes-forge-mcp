@@ -4,3 +4,4 @@ build/
 forge.env
 *.log
 .DS_Store
+tests/__pycache__/
