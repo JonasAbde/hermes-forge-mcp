@@ -19,16 +19,21 @@ With Forge MCP, any MCP-compatible client (Claude Desktop, Cursor, Windsurf, etc
 
 ## Quick Start
 
+### Git clone distribution (recommended)
+
 ```bash
-# Clone and install
 git clone https://github.com/JonasAbde/hermes-forge-mcp.git
 cd hermes-forge-mcp
-npm install
-npm run build
+npm install   # also runs build via prepare script
+```
 
-# Configure authentication (choose one)
-export FORGE_PAT=hfp_your_pat_here
-# or: export FORGE_API_KEY=forge_key_your_api_key_here
+### npm (future — not yet published)
+
+Once published to npm:
+
+```bash
+npm install forge-mcp
+npx forge-mcp
 ```
 
 Generate your PAT at [forge.tekup.dk/account](https://forge.tekup.dk/account).
