@@ -59,6 +59,18 @@ function loadConfig(): ForgeConfig {
 const PORT = parseInt(process.env.MCP_HTTP_PORT ?? "8642", 10);
 const CONFIG = loadConfig();
 
+/** Tool names exposed by this MCP server — used by /health/tools and CLI status.
+ *  Keep in sync with the tools in ListToolsRequestSchema handler below. */
+const MCP_TOOLS: Array<{ name: string; description: string }> = [
+  { name: "open_pack", description: "Open/reveal a new agent from a pack" },
+  { name: "chat_with_agent", description: "Send a message to an agent in a chat session" },
+  { name: "fuse_agents", description: "Fuse two agents together (Synthesis)" },
+  { name: "get_xp", description: "Get XP/level info for an agent" },
+  { name: "subscribe_tier", description: "Get subscription tier and usage limits" },
+  { name: "deploy_agent_to_telegram", description: "Deploy an agent to Telegram webhook" },
+  { name: "get_magic_link", description: "Request a magic link for email authentication" },
+];
+
 // ─── Token Masking & Auth Helpers ─────────────────────────────────────
 
 /** Mask a sensitive token, showing only the first and last few characters. */
@@ -867,6 +879,16 @@ app.get("/health", (_req, res) => {
     version: "1.0.0",
     forgeApi: CONFIG.baseUrl,
     authenticated: !!(CONFIG.pat || CONFIG.apiKey),
+    toolCount: MCP_TOOLS.length,
+  });
+});
+
+// Tool list endpoint — direct HTTP (no MCP handshake) for CLI status checks
+app.get("/health/tools", (_req, res) => {
+  res.json({
+    status: "ok",
+    tools: MCP_TOOLS.map((t) => t.name),
+    count: MCP_TOOLS.length,
   });
 });
 
