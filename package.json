@@ -10,7 +10,7 @@
     "dev": "tsx src/index.ts",
     "prepare": "npm run build",
     "inspect": "npx @modelcontextprotocol/inspector node build/index.js",
-    "test": "npm run smoke && node --test tests/test-auth.mjs",
+    "test": "npm run smoke && node --test tests/test-auth.mjs tests/test-resilience.mjs",
     "smoke": "node tests/smoke.mjs"
   },
   "keywords": ["mcp", "forge", "ai-agents", "model-context-protocol", "hermes-forge"],

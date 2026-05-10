@@ -35,6 +35,11 @@ import {
   GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import * as crypto from "node:crypto";
+import {
+  validateAndLog,
+  exponentialBackoffRetry,
+  recordHealth,
+} from "./resilience.js";
 
 // ─── Auth & Config ─────────────────────────────────────────────────────
 
@@ -133,9 +138,16 @@ interface ForgeResponse<T = unknown> {
   data?: T;
 }
 
+/**
+ * Fetch from the Forge API with automatic retry and response validation.
+ * - Retries on transient failures (network, 5xx) with exponential backoff
+ * - Validates response shape against expected contracts
+ * - Records health metrics
+ */
 async function forgeFetch<T = unknown>(
   path: string,
   options: RequestInit = {},
+  validateResponse = false,
 ): Promise<ForgeResponse<T>> {
   const url = `${CONFIG.baseUrl}${path}`;
   const headers: Record<string, string> = {
@@ -145,19 +157,56 @@ async function forgeFetch<T = unknown>(
     ...(options.headers as Record<string, string> | undefined),
   };
 
-  const res = await fetch(url, {
-    ...options,
-    headers,
-  });
+  const fetchFn = async (): Promise<ForgeResponse<T>> => {
+    const res = await fetch(url, { ...options, headers });
 
-  const body = await res.json();
-  if ((body as Record<string, unknown>).status === "error") {
-    const detail = (body as Record<string, unknown>).error ??
-      (body as Record<string, unknown>).detail ??
-      "Forge API error";
-    throw new Error(safeErrorMessage("forgeFetch", String(detail)));
+    if (!res.ok) {
+      // For 5xx errors, retry with backoff
+      if (res.status >= 500) {
+        throw new Error(`Forge API ${res.status} error: ${res.statusText}`);
+      }
+      // For 4xx errors, throw immediately (auth issues, bad requests)
+      const body = await res.text();
+      let detail = body;
+      try {
+        const parsed = JSON.parse(body);
+        detail = parsed.error ?? parsed.detail ?? body;
+      } catch {
+        // keep raw body
+      }
+      throw new Error(safeErrorMessage("forgeFetch", String(detail)));
+    }
+
+    const body = await res.json();
+
+    // Validate response shape if requested (for known contracts)
+    if (validateResponse) {
+      const { isValid, warnings } = validateAndLog(body, path);
+      recordHealth(isValid, warnings.length);
+      if (!isValid) {
+        throw new Error(safeErrorMessage("forgeFetch",
+          `API response shape validation failed for ${path}. The API contract may have changed. ` +
+          `Warnings: ${warnings.join("; ")}`
+        ));
+      }
+    }
+
+    if ((body as Record<string, unknown>).status === "error") {
+      const detail = (body as Record<string, unknown>).error ??
+        (body as Record<string, unknown>).detail ??
+        "Forge API error";
+      throw new Error(safeErrorMessage("forgeFetch", String(detail)));
+    }
+
+    return body as ForgeResponse<T>;
+  };
+
+  try {
+    return await exponentialBackoffRetry(fetchFn, { maxRetries: 2, baseDelayMs: 100 });
+  } catch (err) {
+    recordHealth(false, 0);
+    throw err;
   }
-  return body as ForgeResponse<T>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────

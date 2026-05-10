@@ -337,17 +337,43 @@ Before tagging a public release:
 
 ---
 
-## Comparison: TypeScript MCP vs Python MCP
+## Relationship to forge-mcp-registry (monorepo)
+
+The `JonasAbde/hermes-forge-platform` monorepo contains a **Python MCP server** at `integrations/mcp-forge-registry/` that served as the original reference implementation for Forge catalog access.
 
 | Aspect | Forge MCP (this repo) | forge-mcp-registry (monorepo) |
 |--------|----------------------|------------------------------|
-| **Focus** | Full platform API (read + write) | Read-only catalog |
+| **Purpose** | Full platform API — read + write | Read-only catalog registry |
 | **Language** | TypeScript | Python |
-| **Auth** | PAT, API Key, Magic Link | Optional bearer token |
+| **Auth** | PAT, API Key, Magic Link | Optional Bearer token |
 | **Tools** | 7 (incl. chat, fuse, deploy) | 3 (list, get, resolve) |
 | **Resources** | 3 (packs, agents, profile) | None |
 | **Prompts** | 3 (agent_card, pack_summary, fusion_guide) | None |
-| **Use case** | User-facing MCP client integration | Internal Hermes Agent registry routing |
+| **Status** | **Active development** — source of truth | Legacy / reference |
+
+**This repo (`JonasAbde/hermes-forge-mcp`) is the source of truth for Forge MCP.** The Python MCP in the monorepo is maintained as a legacy read-only registry integration.
+
+### Ported from Python MCP
+
+The following components were ported from `integrations/mcp-forge-registry/`:
+
+| Component | Source | Purpose |
+|-----------|--------|---------|
+| Response shape validation | `api_resilience.py` | Validates API response against `{status, pack, metrics}` contract |
+| Exponential backoff retry | `api_resilience.py` | Auto-retries transient failures with 100ms → 200ms → 400ms backoff |
+| Health tracking | `api_resilience.py` | Monitors API error rates and validation warnings |
+| Test patterns | `tests/test_api_resilience.py` | Mocked unit tests with controlled API responses |
+
+See [`src/resilience.ts`](src/resilience.ts) for the ported implementation.
+
+### What was NOT ported
+
+| Component | Reason |
+|-----------|--------|
+| Prometheus metrics (`metrics.py`) | Valuable but out of scope for v1 — planned for future release |
+| Hardcoded bundle fallback (`bundles_data.py`) | Platform-specific game data, not appropriate for MCP server |
+| Python packaging (`pyproject.toml`) | Language-specific — this is a TypeScript/Node.js project |
+| Monorepo CI/config | Belongs in the monorepo, not in this standalone repo |
 
 ---
 
