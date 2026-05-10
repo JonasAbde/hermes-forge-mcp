@@ -34,6 +34,7 @@ import {
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import * as crypto from "node:crypto";
 
 // ─── Auth & Config ─────────────────────────────────────────────────────
 
@@ -358,7 +359,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "deploy_agent_to_telegram",
         description:
-          "Deploy an agent to Telegram by creating a webhook. ⚠️ Requires authentication and a Telegram bot token from @BotFather. Telegram token is never logged or stored — only used for the API call.",
+          "Deploy an agent to Telegram by creating a webhook. ⚠️ Requires authentication and a Telegram bot token from @BotFather. Never logs or stores the token — only used for the API call. Provide a secret or one is generated automatically.",
         inputSchema: {
           type: "object",
           properties: {
@@ -369,6 +370,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             telegramBotToken: {
               type: "string",
               description: "The Telegram bot token from @BotFather",
+            },
+            secret: {
+              type: "string",
+              description:
+                "Optional: a secret string for webhook verification (min 16 chars). If omitted, a 32-char random secret is generated automatically.",
             },
             webhookUrl: {
               type: "string",
@@ -547,9 +553,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const depAgentId = String(args?.agentId ?? "");
       const botToken = String(args?.telegramBotToken ?? "");
       const customUrl = args?.webhookUrl ? String(args.webhookUrl) : undefined;
+      const providedSecret = args?.secret ? String(args.secret) : undefined;
 
       if (!depAgentId) throw new Error("agentId is required");
       if (!botToken) throw new Error("telegramBotToken is required");
+      if (providedSecret && providedSecret.length < 16) {
+        throw new Error("secret must be at least 16 characters long");
+      }
+
+      // Use provided secret or generate a random 32-char hex string
+      const webhookSecret = providedSecret ?? crypto.randomBytes(32).toString("hex");
 
       // Step 1: Create a Forge webhook for this agent
       const targetUrl =
@@ -561,7 +574,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         body: JSON.stringify({
           url: targetUrl,
           events: ["agent.message", "agent.deployed"],
-          secret: botToken.slice(-16),
+          secret: webhookSecret,
         }),
       });
 
