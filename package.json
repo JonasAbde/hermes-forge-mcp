@@ -15,6 +15,9 @@
   },
   "keywords": ["mcp", "forge", "ai-agents", "model-context-protocol", "hermes-forge"],
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.1"
   },
