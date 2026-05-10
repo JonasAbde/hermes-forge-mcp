@@ -1,8 +1,8 @@
 /**
- * Hermes Forge MCP Server
+ * Forge MCP — Model Context Protocol server for the Hermes Forge Platform.
  *
- * A Model Context Protocol (MCP) server that exposes the Hermes Forge
- * AI Agent Platform to any MCP-compatible client.
+ * Exposes the Forge API (packs, agents, chat, fusion, deployment) to any
+ * MCP-compatible client: Claude Desktop, Cursor, Windsurf, and others.
  *
  * Resources:
  *   forge://packs           — List all Agent Packs
@@ -10,18 +10,18 @@
  *   forge://user/profile    — Get authenticated user profile
  *
  * Tools:
- *   open_pack              — Open/reveal a new agent from a pack
- *   chat_with_agent        — Chat with an agent in a session
- *   fuse_agents            — Fuse two agents (synthesis)
- *   get_xp                 — Get XP/level info for an agent
- *   subscribe_tier         — Get subscription tier info
+ *   open_pack               — Open/reveal a new agent from a pack
+ *   chat_with_agent         — Chat with an agent in a session
+ *   fuse_agents             — Fuse two agents (synthesis)
+ *   get_xp                  — Get XP/level info for an agent
+ *   subscribe_tier          — Get subscription tier info
  *   deploy_agent_to_telegram — Deploy an agent to Telegram webhook
- *   get_magic_link         — Request a magic link for email auth
+ *   get_magic_link          — Request a magic link for email auth
  *
  * Prompts:
- *   agent_card             — Generate an agent card overview
- *   pack_summary           — Summarize an Agent Pack
- *   fusion_guide           — Guide to agent fusion mechanics
+ *   agent_card              — Generate an agent card overview
+ *   pack_summary            — Summarize an Agent Pack
+ *   fusion_guide            — Guide to agent fusion mechanics
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -45,7 +45,6 @@ interface ForgeConfig {
 }
 
 function loadConfig(): ForgeConfig {
-  // Load from environment directly (forge.env sourced by MCP runner)
   const cfg: ForgeConfig = {
     baseUrl: process.env.FORGE_API_BASE_URL ?? "https://forge.tekup.dk/api/forge",
     pat: process.env.FORGE_PAT,
@@ -57,7 +56,20 @@ function loadConfig(): ForgeConfig {
 
 const CONFIG = loadConfig();
 
-// ─── Forge API Client ────────────────────────────────────────────────
+// ─── Token Masking ───────────────────────────────────────────────────
+
+/** Mask a sensitive token, showing only the first and last few characters. */
+function maskToken(token: string | undefined, visibleChars = 8): string {
+  if (!token || token.length <= visibleChars + 4) return "***";
+  const head = token.slice(0, visibleChars);
+  const tail = token.slice(-4);
+  return `${head}...${tail}`;
+}
+
+/** Check whether the current config has authentication configured. */
+function hasAuth(): boolean {
+  return !!(CONFIG.pat || CONFIG.apiKey);
+}
 
 /** Build auth headers from config */
 function authHeaders(): Record<string, string> {
@@ -76,6 +88,43 @@ function authHeaders(): Record<string, string> {
   }
   return h;
 }
+
+/** Error thrown when an authenticated endpoint is called without credentials. */
+class AuthRequiredError extends Error {
+  constructor(toolName: string) {
+    super(
+      `Authentication required for "${toolName}".\n\n` +
+      `Set one of:\n` +
+      `  - FORGE_PAT=hfp_xxx  (Personal Access Token from forge.tekup.dk/account)\n` +
+      `  - FORGE_API_KEY=xxx  (API Key from forge.tekup.dk/account)\n\n` +
+      `Pass these as environment variables in your MCP client config (see README).\n` +
+      `Read-only endpoints (forge://packs, get_magic_link) work without auth.`
+    );
+  }
+}
+
+/** Require auth or throw a helpful error. */
+function requireAuth(toolName: string): void {
+  if (!hasAuth()) {
+    throw new AuthRequiredError(toolName);
+  }
+}
+
+/** Build a safe error message that never leaks raw tokens. */
+function safeErrorMessage(context: string, raw: string): string {
+  // Attempt to detect leaked tokens in error text
+  const patPattern = /hfp_[A-Za-z0-9_-]{10,}/g;
+  const keyPattern = /forge_key_[A-Za-z0-9_-]{10,}/g;
+  const tgPattern = /\d{7,10}:[A-Za-z0-9_-]{35,}/g;
+
+  let safe = raw;
+  safe = safe.replace(patPattern, (m) => maskToken(m));
+  safe = safe.replace(keyPattern, (m) => maskToken(m));
+  safe = safe.replace(tgPattern, (m) => maskToken(m));
+  return safe;
+}
+
+// ─── Forge API Client ────────────────────────────────────────────────
 
 interface ForgeResponse<T = unknown> {
   status: string;
@@ -101,8 +150,11 @@ async function forgeFetch<T = unknown>(
   });
 
   const body = await res.json();
-  if (body.status === "error") {
-    throw new Error(body.error ?? body.detail ?? "Forge API error");
+  if ((body as Record<string, unknown>).status === "error") {
+    const detail = (body as Record<string, unknown>).error ??
+      (body as Record<string, unknown>).detail ??
+      "Forge API error";
+    throw new Error(safeErrorMessage("forgeFetch", String(detail)));
   }
   return body as ForgeResponse<T>;
 }
@@ -121,7 +173,7 @@ function jsonContent(data: unknown) {
 
 const server = new Server(
   {
-    name: "hermes-forge-mcp",
+    name: "forge-mcp",
     version: "1.0.0",
   },
   {
@@ -141,7 +193,7 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
       {
         uri: "forge://packs",
         name: "Agent Packs Catalog",
-        description: "List all Agent Packs available in the Hermes Forge catalog",
+        description: "List all Agent Packs available in the Forge catalog",
         mimeType: "application/json",
       },
       {
@@ -178,6 +230,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     }
 
     case "forge://agents": {
+      requireAuth("forge://agents");
       const data = await forgeFetch("/v1/agents");
       return {
         contents: [
@@ -191,6 +244,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     }
 
     case "forge://user/profile": {
+      requireAuth("forge://user/profile");
       const data = await forgeFetch("/v1/me");
       return {
         contents: [
@@ -216,14 +270,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "open_pack",
         description:
-          "Open/reveal a new agent from a pack. Creates an agent entity in the user's collection with random stat rolls.",
+          "Open/reveal a new agent from a pack. Creates an agent in your collection with random stat rolls. Requires authentication.",
         inputSchema: {
           type: "object",
           properties: {
             packId: {
               type: "string",
               description:
-                "The pack ID to open (e.g., 'hermes-agent', 'code-assistant'). Get available packs via forge://packs resource.",
+                "The pack ID to open (e.g., 'hermes-agent', 'code-assistant'). Discover available packs via the forge://packs resource.",
             },
           },
           required: ["packId"],
@@ -232,7 +286,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "chat_with_agent",
         description:
-          "Send a message to an agent in a chat session. Auto-rewards 25 XP to the agent. If no sessionId is provided, creates a new session.",
+          "Send a message to an agent in a chat session. Auto-rewards 25 XP. Requires authentication.",
         inputSchema: {
           type: "object",
           properties: {
@@ -261,7 +315,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "fuse_agents",
         description:
-          "Fuse two agents together (Synthesis). 85% success rate — base agent gains levels. 15% Core Fracture — base agent resets to level 1. Fodder agent is always consumed.",
+          "Fuse two agents together (Synthesis). 85% success — base gains levels. 15% Core Fracture — base resets to level 1. Fodder consumed. Requires authentication.",
         inputSchema: {
           type: "object",
           properties: {
@@ -280,7 +334,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "get_xp",
         description:
-          "Get the current XP, level, and level progress information for a specific agent.",
+          "Get the current XP, level, and level progress for a specific agent. Requires authentication.",
         inputSchema: {
           type: "object",
           properties: {
@@ -295,7 +349,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "subscribe_tier",
         description:
-          "Get the authenticated user's subscription tier information including limits on agents, collections, and webhooks.",
+          "Get subscription tier and usage limits for the authenticated user. Requires authentication.",
         inputSchema: {
           type: "object",
           properties: {},
@@ -304,7 +358,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "deploy_agent_to_telegram",
         description:
-          "Deploy an agent to Telegram by creating a webhook that forwards Telegram messages to the agent's chat session.",
+          "Deploy an agent to Telegram by creating a webhook. ⚠️ Requires authentication and a Telegram bot token from @BotFather. Telegram token is never logged or stored — only used for the API call.",
         inputSchema: {
           type: "object",
           properties: {
@@ -328,7 +382,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "get_magic_link",
         description:
-          "Request a magic link for email-based authentication. In development, the verify URL is returned in the response.",
+          "Request a magic link for email-based authentication. Does not require a PAT or API key — use this to authenticate via email.",
         inputSchema: {
           type: "object",
           properties: {
@@ -340,7 +394,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "string",
               description:
                 "Optional: post-login redirect path (default: '/')",
-              default: "/",
             },
           },
           required: ["email"],
@@ -356,6 +409,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   switch (name) {
     // ── open_pack ──────────────────────────────────────────────────
     case "open_pack": {
+      requireAuth("open_pack");
       const packId = String(args?.packId ?? "");
       if (!packId) throw new Error("packId is required");
 
@@ -376,6 +430,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── chat_with_agent ───────────────────────────────────────────
     case "chat_with_agent": {
+      requireAuth("chat_with_agent");
       const agentId = String(args?.agentId ?? "");
       const message = String(args?.message ?? "");
       const sessionId = args?.sessionId ? String(args.sessionId) : undefined;
@@ -424,6 +479,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── fuse_agents ─────────────────────────────────────────────
     case "fuse_agents": {
+      requireAuth("fuse_agents");
       const baseAgentId = String(args?.baseAgentId ?? "");
       const fodderAgentId = String(args?.fodderAgentId ?? "");
 
@@ -454,17 +510,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── get_xp ────────────────────────────────────────────────
     case "get_xp": {
+      requireAuth("get_xp");
       const agentIdXp = String(args?.agentId ?? "");
       if (!agentIdXp) throw new Error("agentId is required");
 
-      // Get agent detail (includes XP, level, level_progress)
       const agent = await forgeFetch(`/v1/agents/${agentIdXp}`);
 
       return {
         content: [
           jsonContent(agent),
           textContent(
-            `📊 Agent XP details retrieved for ${agentIdXp}. See above for full stats.`,
+            `📊 XP details retrieved for ${agentIdXp}. See above for full stats.`,
           ),
         ],
       };
@@ -472,6 +528,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── subscribe_tier ─────────────────────────────────────────
     case "subscribe_tier": {
+      requireAuth("subscribe_tier");
       const data = await forgeFetch("/v1/me/tier");
 
       return {
@@ -486,6 +543,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── deploy_agent_to_telegram ───────────────────────────────────
     case "deploy_agent_to_telegram": {
+      requireAuth("deploy_agent_to_telegram");
       const depAgentId = String(args?.agentId ?? "");
       const botToken = String(args?.telegramBotToken ?? "");
       const customUrl = args?.webhookUrl ? String(args.webhookUrl) : undefined;
@@ -528,7 +586,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             webhook: webhookRes,
             telegram: tgData,
             agentId: depAgentId,
-            botToken: botToken.slice(0, 8) + "...",
+            // Only expose a masked version of the bot token in the response
+            botToken: maskToken(botToken, 12),
           }),
           textContent(
             `🤖 Agent ${depAgentId} deployed to Telegram! Webhook created (${webhookId}). Telegram webhook ${tgData.ok ? "configured successfully ✅" : "failed ❌"}.`,
@@ -576,7 +635,7 @@ server.setRequestHandler(ListPromptsRequestSchema, async () => {
       {
         name: "agent_card",
         description:
-          "Generate a formatted agent card overview showing an agent's stats, level, XP, rarity, and fusion history.",
+          "Generate a formatted agent card overview — stats, level, XP, rarity, and fusion history.",
         arguments: [
           {
             name: "agentId",
@@ -588,7 +647,7 @@ server.setRequestHandler(ListPromptsRequestSchema, async () => {
       {
         name: "pack_summary",
         description:
-          "Summarize an Agent Pack from the catalog including description, capabilities, rarity, and trust metrics.",
+          "Summarize an Agent Pack from the catalog — description, capabilities, rarity, and trust metrics.",
         arguments: [
           {
             name: "packId",
@@ -783,9 +842,13 @@ Success   Fracture (15%)
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("🚀 Hermes Forge MCP Server running on stdio");
+  console.error("🚀 Forge MCP running on stdio");
   console.error(`   API Base: ${CONFIG.baseUrl}`);
-  console.error(`   Auth: ${CONFIG.pat ? "PAT" : CONFIG.apiKey ? "API Key" : CONFIG.email ? "Email (magic link)" : "None (public only)"}`);
+  const authMethod = CONFIG.pat ? "PAT" : CONFIG.apiKey ? "API Key" : CONFIG.email ? "Email (magic link)" : "None";
+  console.error(`   Auth: ${authMethod}`);
+  if (hasAuth()) {
+    console.error(`   Token: ${maskToken(CONFIG.pat || CONFIG.apiKey)}`);
+  }
 }
 
 main().catch((err) => {

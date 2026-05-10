@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Hermes Forge MCP Server — Example Usage Script
+ * Forge MCP — Example Usage Script
  *
  * This demonstrates programmatic use of the MCP server via stdio JSON-RPC.
  * Each example sends a JSON-RPC request and prints the response.
