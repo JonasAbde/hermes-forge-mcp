@@ -646,8 +646,13 @@ export function createToolHandlers(
                 }),
               },
             );
-            sid = (sessionRes as Record<string, unknown>)
-              .id as string;
+            // Platform returns { status: 'ok', session: { id: '...' } }
+            const session = (
+              sessionRes as Record<string, unknown>
+            )?.session as Record<string, unknown> | undefined;
+            sid = (session?.id as string) ?? (
+              sessionRes as Record<string, unknown>
+            ).id as string;
           }
 
           // Send message
