@@ -643,6 +643,9 @@ export function createToolHandlers(
                   agentId,
                   model: model ?? agentId,
                   title: `Chat with ${agentId}`,
+                  metadata: {
+                    active_pack_ids: [agentId],
+                  },
                 }),
               },
             );
