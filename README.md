@@ -1,6 +1,7 @@
 # Forge MCP
 
 [![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-blue)](https://modelcontextprotocol.io)
+[![CI](https://github.com/JonasAbde/hermes-forge-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/JonasAbde/hermes-forge-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **Forge MCP** is a [Model Context Protocol](https://modelcontextprotocol.io) server that bridges AI assistants to the **Hermes Forge** AI Agent Platform.
@@ -9,7 +10,7 @@ With Forge MCP, any MCP-compatible client (Claude Desktop, Cursor, Windsurf, etc
 
 - **Discover** Agent Packs from the Forge catalog
 - **Open** new agents from packs
-- **Chat** with agents in sessions
+- **Chat** with agents in sessions (+25 XP per message)
 - **Fuse** agents together (Synthesis / Core Fracture)
 - **Track** XP, levels, and subscription tier
 - **Deploy** agents to Telegram
@@ -19,7 +20,7 @@ With Forge MCP, any MCP-compatible client (Claude Desktop, Cursor, Windsurf, etc
 
 ## Quick Start
 
-### Git clone distribution (recommended)
+### Git clone
 
 ```bash
 git clone https://github.com/JonasAbde/hermes-forge-mcp.git
@@ -27,23 +28,48 @@ cd hermes-forge-mcp
 npm install   # also runs build via prepare script
 ```
 
-### npm (future — not yet published)
-
-Once published to npm:
-
-```bash
-npm install forge-mcp
-npx forge-mcp
-```
-
 Generate your PAT at [forge.tekup.dk/account](https://forge.tekup.dk/account).
 
 ### Verify it works
+
+**Stdio (local):**
 
 ```bash
 # List available packs (public — no auth required)
 echo '{"jsonrpc":"2.0","id":1,"method":"resources/list"}' | node build/index.js
 ```
+
+**HTTP (remote/VPS):**
+
+```bash
+# Health check
+curl http://localhost:8641/health
+
+# List available tools
+curl http://localhost:8641/health/tools
+```
+
+---
+
+## Production Deployment (VPS)
+
+The MCP server runs as a **systemd service** with auto-restart on failure and boot. See [`DEPLOY.md`](DEPLOY.md) for the full runbook.
+
+```bash
+# Service status
+sudo systemctl status forge-mcp.service
+
+# Restart after update
+sudo systemctl restart forge-mcp.service
+
+# Logs
+sudo journalctl -u forge-mcp.service -f
+```
+
+The HTTP server runs on port **8641** by default and exposes:
+- `GET /health` — Server + auth + API health status
+- `GET /health/tools` — Registered tools metadata
+- `POST /mcp` — MCP protocol endpoint (SSE-based HTTP transport)
 
 ---
 
@@ -57,12 +83,14 @@ Read-only endpoints that return structured data from the Forge API.
 |-----|------|-------------|
 | `forge://packs` | No | List all Agent Packs in the catalog |
 | `forge://agents` | Yes | List your collected agents with XP, level, and stats |
-| `forge://user/profile` | Yes | Get your user profile |
+| `forge://user/profile` | Yes | Get your user profile (full DTO) |
 
 ### Tools
 
 | Tool | Auth | Description |
 |------|------|-------------|
+| `forge_list_packs` | No | List Agent Packs with filter, sort, and theme options |
+| `forge_get_pack` | No | Get full details for a single Agent Pack by ID |
 | `open_pack` | Yes | Open/reveal a new agent from a pack |
 | `chat_with_agent` | Yes | Send a message to an agent (+25 XP per message) |
 | `fuse_agents` | Yes | Fuse two agents (85% success / 15% Core Fracture) |
@@ -71,7 +99,7 @@ Read-only endpoints that return structured data from the Forge API.
 | `deploy_agent_to_telegram` | Yes | Deploy an agent to Telegram via webhook |
 | `get_magic_link` | No | Request a magic link for email-based authentication |
 
-**⚠️ Important:** All mutation tools (`open_pack`, `chat_with_agent`, `fuse_agents`, `get_xp`, `subscribe_tier`, `deploy_agent_to_telegram`) and authenticated resources (`forge://agents`, `forge://user/profile`) require `FORGE_PAT` or `FORGE_API_KEY`. If unauthenticated, they will return a clear error with setup instructions.
+**Total: 9 tools.** All mutation tools and authenticated resources require `FORGE_PAT` or `FORGE_API_KEY`. Read-only tools (`forge_list_packs`, `forge_get_pack`, `get_magic_link`) work without auth.
 
 ### Prompts
 
@@ -92,7 +120,9 @@ Forge MCP proxies the following Hermes Forge API endpoints:
 | `forge://packs` | `GET /api/forge/packs` | ✅ Live |
 | `forge://packs/{packId}` | `GET /api/forge/packs/{packId}` | ✅ Live |
 | `forge://agents` | `GET /api/forge/v1/agents` | ✅ Live |
-| `forge://user/profile` | `GET /api/forge/v1/me` | ✅ Live |
+| `forge://user/profile` | `GET /api/forge/v1/me/profile` | ✅ Live |
+| `forge_list_packs` | `GET /api/forge/packs?catalog&sort&q&theme` | ✅ Live |
+| `forge_get_pack` | `GET /api/forge/packs/{packId}` | ✅ Live |
 | `open_pack` | `POST /api/forge/v1/agents` | ✅ Live |
 | `chat_with_agent` (create) | `POST /api/forge/v1/chat/sessions` | ✅ Live |
 | `chat_with_agent` (message) | `POST /api/forge/v1/chat/sessions/{id}/messages` | ✅ Live |
@@ -118,8 +148,11 @@ All endpoints are verified against the live Forge API at `forge.tekup.dk`. If an
 | `FORGE_API_KEY` | One of | — | API Key |
 | `FORGE_EMAIL` | No | — | Email for magic link auth |
 | `FORGE_EXTRA_HEADERS` | No | — | Extra JSON headers (advanced) |
+| `MCP_HTTP_PORT` | No | `8641` | HTTP server listen port (production) |
 
 ### MCP Client Configuration
+
+All client configs use `stdio` transport via `build/index.js`. For remote MCP access, point clients to the HTTP endpoint at `http://host:8641`.
 
 #### Claude Desktop
 
@@ -142,8 +175,6 @@ Add to your `claude_desktop_config.json`:
 
 #### Cursor
 
-In Cursor settings → Features → MCP Servers:
-
 ```
 Name: forge-mcp
 Type: command
@@ -151,45 +182,18 @@ Command: node /path/to/hermes-forge-mcp/build/index.js
 Environment: FORGE_PAT=hfp_your_pat_here FORGE_API_BASE_URL=https://forge.tekup.dk/api/forge
 ```
 
-Or add to your `.cursor/mcp.json`:
+#### Hermes Agent
 
-```json
-{
-  "mcpServers": {
-    "forge-mcp": {
-      "command": "node",
-      "args": ["/path/to/hermes-forge-mcp/build/index.js"],
-      "env": {
-        "FORGE_API_BASE_URL": "https://forge.tekup.dk/api/forge",
-        "FORGE_PAT": "hfp_your_pat_here"
-      }
-    }
-  }
-}
-```
+Configure in `.hermes/config.yaml`:
 
-#### Windsurf
-
-In Windsurf settings → MCP Servers, add:
-
-```
-Command: node /path/to/hermes-forge-mcp/build/index.js
-Environment: FORGE_PAT=hfp_your_pat_here
-```
-
-#### MCP Inspector
-
-```bash
-# Quick inspection of resources/tools/prompts
-npm run inspect
-```
-
-Or with explicit env:
-
-```bash
-FORGE_API_BASE_URL=https://forge.tekup.dk/api/forge \
-FORGE_PAT=hfp_your_pat_here \
-npx @modelcontextprotocol/inspector node build/index.js
+```yaml
+mcp_servers:
+  forge-mcp:
+    command: "node"
+    args: ["/path/to/hermes-forge-mcp/build/http-server.js"]
+    env:
+      FORGE_API_BASE_URL: "https://forge.tekup.dk/api/forge"
+      FORGE_PAT: "hfp_your_pat_here"
 ```
 
 ---
@@ -197,21 +201,28 @@ npx @modelcontextprotocol/inspector node build/index.js
 ## Architecture
 
 ```
-MCP Client (Claude Desktop, Cursor, Windsurf, etc.)
-       │
-       ▼
-Forge MCP Server (stdio transport — build/index.js)
-       │
-       ▼
+MCP Client (Claude Desktop, Cursor, Hermes Agent)
+       |
+       v
+Forge MCP Server (HTTP @ :8641 or stdio)
+       |
+       v
 Forge REST API (forge.tekup.dk/api/forge)
-       │
-       ▼
+       |
+       v
 SQLite (forge.db) + Agent Pack Catalog
 ```
 
-- **Resources** map to read-only API calls (`GET /packs`, `GET /v1/agents`, `GET /v1/me`)
+**Transport modes:**
+- **Stdio** (`build/index.js`) — local clients (Claude Desktop, Cursor)
+- **HTTP** (`build/http-server.js`, port 8641) — remote/VPS deployment, health endpoints
+
+**Design principles:**
+- **Resources** map to read-only API calls (`GET /packs`, `GET /v1/agents`, `GET /v1/me/profile`)
 - **Tools** map to mutation API calls (`POST /v1/agents`, `POST /v1/chat/sessions`, etc.)
 - **Prompts** are template-based, fetching live data from the API and formatting it
+- **No own database** — all data fetched live from the Forge Platform API
+- **No catalog copy** — the platform is the single source of truth
 
 ---
 
@@ -219,24 +230,11 @@ SQLite (forge.db) + Agent Pack Catalog
 
 ### Authentication
 
-All mutation tools require authentication. If you call a tool without credentials, you'll receive:
-
-```
-Authentication required for "open_pack".
-
-Set one of:
-  - FORGE_PAT=hfp_xxx  (Personal Access Token from forge.tekup.dk/account)
-  - FORGE_API_KEY=xxx  (API Key from forge.tekup.dk/account)
-
-Pass these as environment variables in your MCP client config.
-```
+All mutation tools require authentication. If you call a tool without credentials, you'll receive a clear error with setup instructions.
 
 ### Token Safety
 
-- **Tokens are never logged.** The server masks PATs, API keys, and Telegram bot tokens in all:
-  - Startup messages (`Token: hfp_xxxx...abcd`)
-  - Error responses (leaked tokens are regex-detected and masked)
-  - Tool responses (`deploy_agent_to_telegram` returns only a masked token preview)
+- **Tokens are never logged.** The server masks PATs, API keys, and Telegram bot tokens in all startup messages, error responses, and tool output.
 - **PATs and API keys live in environment variables only** — never in code, config files, or logs.
 - **The `forge.env` file is gitignored** — never commit your tokens to version control.
 
@@ -248,25 +246,24 @@ Pass these as environment variables in your MCP client config.
 | Telegram tokens | Never share. Only used for the `setWebhook` API call |
 | `deploy_agent_to_telegram` | Creates a live webhook — verify the target agent first |
 | `fuse_agents` | Destroys the fodder agent — this is irreversible |
-| Forking | The repo is MIT licensed — fork responsibly |
 
 ---
 
 ## Troubleshooting
 
-### "Authentication required" on mutation tools
+### \"Authentication required\" on mutation tools
 → You need `FORGE_PAT` or `FORGE_API_KEY` set in your environment. Generate one at [forge.tekup.dk/account](https://forge.tekup.dk/account).
 
-### "Cannot find module" errors
+### \"Cannot find module\" errors
 → Run `npm install` then `npm run build`.
 
-### "Failed to fetch" / "fetch is not defined"
+### \"Failed to fetch\" / \"fetch is not defined\"
 → Forge MCP requires Node.js 18+ (the `fetch` API is built-in). Check `node --version`.
 
-### "resources/list" returns nothing
-→ Ensure `npm run build` completed successfully. The server communicates over stdin/stdout — use `echo '{"jsonrpc":"2.0","id":1,"method":"resources/list"}' | node build/index.js` to test.
+### \"resources/list\" returns nothing
+→ Ensure `npm run build` completed successfully. Test stdio mode: `echo '{"jsonrpc":"2.0","id":1,"method":"resources/list"}' | node build/index.js`
 
-### "Forge API error" messages
+### \"Forge API error\" messages
 → Your token may be invalid or expired. Regenerate at [forge.tekup.dk/account](https://forge.tekup.dk/account). Or the API may be down — check `FORGE_API_BASE_URL` is correct.
 
 ### MCP Inspector shows no tools
@@ -304,14 +301,18 @@ npm run inspect
 ```
 hermes-forge-mcp/
 ├── src/
-│   └── index.ts          # MCP server source
+│   ├── index.ts          # MCP server source (stdio)
+│   ├── http-server.ts    # HTTP server wrapper + health endpoints
+│   ├── shared.ts         # Shared config, auth, API client, MCP handlers
+│   └── resilience.ts     # Response validation, retry, health tracking
 ├── build/                 # Compiled output (gitignored)
 ├── tests/
 │   ├── smoke.mjs          # stdio smoke test (no API calls)
-│   └── test-*.mjs         # Unit tests (Node.js test runner)
-├── examples/
-│   └── usage.mjs          # Example usage script
-├── .env.example           # Config template
+│   ├── test-auth.mjs      # Auth unit tests
+│   ├── test-resilience.mjs # Resilience layer tests
+│   └── test-http.mjs      # HTTP server tests
+├── DEPLOY.md              # Production deployment runbook
+├── forge.env.example      # Config template
 ├── package.json
 └── tsconfig.json
 ```
@@ -322,58 +323,29 @@ hermes-forge-mcp/
 
 Before tagging a public release:
 
-- [ ] `npm test` passes (unit tests + schema checks)
+- [ ] `npm test` passes (78 smoke + 17 unit)
 - [ ] `npm run build` succeeds cleanly
 - [ ] `npm run smoke` passes (stdio contract verification)
 - [ ] All mutation tools require auth (verified)
 - [ ] Tokens masked in logs, errors, and responses (audited)
 - [ ] README is current (resources, tools, prompts, endpoints)
-- [ ] MCP Inspector shows all resources/tools/prompts
-- [ ] Claude Desktop config verified
+- [ ] MCP Inspector shows all 9 tools / 3 resources / 3 prompts
+- [ ] HTTP health endpoints respond correctly
 - [ ] `forge.env` not tracked in git
 - [ ] Version bumped in `package.json`
 - [ ] License file present
-- [ ] GitHub release drafted with changelog
+- [ ] DEPLOY.md reflects current deployment model
 
 ---
 
-## Relationship to forge-mcp-registry (monorepo)
+## Deployment
 
-The `JonasAbde/hermes-forge-platform` monorepo contains a **Python MCP server** at `integrations/mcp-forge-registry/` that served as the original reference implementation for Forge catalog access.
-
-| Aspect | Forge MCP (this repo) | forge-mcp-registry (monorepo) |
-|--------|----------------------|------------------------------|
-| **Purpose** | Full platform API — read + write | Read-only catalog registry |
-| **Language** | TypeScript | Python |
-| **Auth** | PAT, API Key, Magic Link | Optional Bearer token |
-| **Tools** | 7 (incl. chat, fuse, deploy) | 3 (list, get, resolve) |
-| **Resources** | 3 (packs, agents, profile) | None |
-| **Prompts** | 3 (agent_card, pack_summary, fusion_guide) | None |
-| **Status** | **Active development** — source of truth | Legacy / reference |
-
-**This repo (`JonasAbde/hermes-forge-mcp`) is the source of truth for Forge MCP.** The Python MCP in the monorepo is maintained as a legacy read-only registry integration.
-
-### Ported from Python MCP
-
-The following components were ported from `integrations/mcp-forge-registry/`:
-
-| Component | Source | Purpose |
-|-----------|--------|---------|
-| Response shape validation | `api_resilience.py` | Validates API response against `{status, pack, metrics}` contract |
-| Exponential backoff retry | `api_resilience.py` | Auto-retries transient failures with 100ms → 200ms → 400ms backoff |
-| Health tracking | `api_resilience.py` | Monitors API error rates and validation warnings |
-| Test patterns | `tests/test_api_resilience.py` | Mocked unit tests with controlled API responses |
-
-See [`src/resilience.ts`](src/resilience.ts) for the ported implementation.
-
-### What was NOT ported
-
-| Component | Reason |
-|-----------|--------|
-| Prometheus metrics (`metrics.py`) | Valuable but out of scope for v1 — planned for future release |
-| Hardcoded bundle fallback (`bundles_data.py`) | Platform-specific game data, not appropriate for MCP server |
-| Python packaging (`pyproject.toml`) | Language-specific — this is a TypeScript/Node.js project |
-| Monorepo CI/config | Belongs in the monorepo, not in this standalone repo |
+See [`DEPLOY.md`](DEPLOY.md) for:
+- systemd service setup
+- Environment configuration
+- Deploy flow (pull → build → test → restart)
+- Health check endpoints
+- Logging via journald
 
 ---
 
