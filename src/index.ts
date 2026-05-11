@@ -372,7 +372,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "chat_with_agent",
         description:
-          "Send a message in a Forge chat session. Creates a new session if none is provided. Requires authentication.",
+          "Send a message in a Forge chat session. Creates a new session if none is provided. Requires authentication; XP not automatically awarded through this tool.",
         inputSchema: {
           type: "object",
           properties: {
@@ -446,7 +446,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "deploy_agent_to_telegram",
         description:
-          "Deploy an agent to Telegram by creating a webhook. Requires authentication and a Telegram bot token from @BotFather.",
+          "[DEPRECATED — non-functional] Create a Forge webhook for an agent. ⚠️ The Telegram webhook setup is broken (target URLs don't exist). Use only for webhook creation; Telegram deploy requires a proper /webhooks/telegram endpoint on the platform backend.",
         inputSchema: {
           type: "object",
           properties: {
