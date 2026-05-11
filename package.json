@@ -11,8 +11,10 @@
     "dev": "tsx src/http-server.ts",
     "dev:stdio": "tsx src/index.ts",
     "prepare": "npm run build",
-    "inspect": "npx @modelcontextprotocol/inspector node build/index.js",
-    "test": "npm run smoke && node --test tests/test-auth.mjs tests/test-resilience.mjs",
+    "lint": "eslint src/",
+    "format": "prettier --check src/",
+    "format:fix": "prettier --write src/",
+    "test": "npm run smoke && node --test tests/test-auth.mjs tests/test-resilience.mjs && node tests/test-http.mjs",
     "smoke": "node tests/smoke.mjs"
   },
   "keywords": [
@@ -30,9 +32,15 @@
     "@modelcontextprotocol/sdk": "^1.6.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^22.13.0",
+    "eslint": "^10.3.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.3",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.59.2"
   }
 }

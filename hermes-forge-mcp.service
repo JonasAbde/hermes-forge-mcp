@@ -9,6 +9,7 @@ WorkingDirectory=/home/ubuntu/projects/hermes-forge-mcp
 Environment=NODE_ENV=production
 Environment=MCP_HTTP_PORT=8641
 Environment=FORGE_API_BASE_URL=https://forge.tekup.dk/api/forge
+EnvironmentFile=/home/ubuntu/projects/hermes-forge-mcp/forge.env
 ExecStart=/usr/bin/node build/http-server.js
 Restart=always
 RestartSec=5
