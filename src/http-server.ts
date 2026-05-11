@@ -29,7 +29,6 @@
 
 import express from "express";
 import cors from "cors";
-import * as crypto from "node:crypto";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
@@ -82,21 +81,27 @@ app.use(express.json());
 
 // ─── HTTP Transport ──────────────────────────────────────────────
 
-const transports = new Map<string, StreamableHTTPServerTransport>();
+/**
+ * Single persistent StreamableHTTPServerTransport instance.
+ * Connected to the MCP server once at startup — not per-request.
+ * The transport handles session lifecycle internally using
+ * sessionId from MCP protocol messages.
+ */
+let mcpTransport: StreamableHTTPServerTransport | null = null;
 
 app.post("/mcp", async (req, res) => {
-  const sessionId = crypto.randomUUID();
-  const transport = new StreamableHTTPServerTransport();
-  transports.set(sessionId, transport);
+  if (!mcpTransport) {
+    res.status(503).json({ error: "MCP transport not initialized" });
+    return;
+  }
 
   try {
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
+    await mcpTransport.handleRequest(req, res, req.body);
   } catch (err) {
     console.error("[Forge MCP] MCP handler error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  } finally {
-    transports.delete(sessionId);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal server error" });
+    }
   }
 });
 
@@ -129,8 +134,12 @@ app.get("/health/tools", (_req, res) => {
 
 // ─── Start ───────────────────────────────────────────────────────
 
-function startServer() {
+async function startServer() {
   const cfg = getConfig();
+
+  // Create and connect the MCP transport once (not per-request)
+  mcpTransport = new StreamableHTTPServerTransport();
+  await server.connect(mcpTransport);
 
   const serverInstance = app.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Forge MCP (HTTP) running on port ${PORT}`);
