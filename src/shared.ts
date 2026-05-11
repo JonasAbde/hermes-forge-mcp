@@ -511,7 +511,7 @@ export function createResourceHandlers(
 
         case "forge://user/profile": {
           authFn("forge://user/profile");
-          const data = await fetchFn("/v1/me");
+          const data = await fetchFn("/v1/me/profile");
           return {
             contents: [
               {
