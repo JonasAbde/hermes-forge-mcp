@@ -11,6 +11,8 @@
  * Tools:
  *   forge_list_packs        — List packs from the Forge catalog
  *   forge_get_pack          — Get details for a single pack
+ *   forge_get_agent         — Get full agent details (XP, level, stats)
+ *   forge_list_leaderboard  — List top packs by trust score
  *   chat_with_agent         — Chat in a Forge session
  *   get_magic_link          — Request a magic link for email auth
  *
@@ -20,6 +22,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createMCPToolSchemas, createResourceHandlers, createToolHandlers, createPromptHandlers, forgeFetch, requireAuth, getConfig, maskToken, hasAuth, } from "./shared.js";
+import logger from "./logger.js";
 // ─── MCP Server ──────────────────────────────────────────────────
 const server = new Server({
     name: "forge-mcp",
@@ -41,9 +44,9 @@ async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
     const config = getConfig();
-    console.error("🚀 Forge MCP running on stdio");
-    console.error(`   API Base: ${config.baseUrl}`);
-    console.error(`   Tools registered: ${toolSchemas.length}`);
+    logger.info("Forge MCP running on stdio");
+    logger.info(`API Base: ${config.baseUrl}`);
+    logger.info(`Tools registered: ${toolSchemas.length}`);
     const authMethod = config.pat
         ? "PAT"
         : config.apiKey
@@ -51,13 +54,13 @@ async function main() {
             : config.email
                 ? "Email (magic link)"
                 : "None";
-    console.error(`   Auth: ${authMethod}`);
+    logger.info(`Auth: ${authMethod}`);
     if (hasAuth()) {
-        console.error(`   Token: ${maskToken(config.pat || config.apiKey)}`);
+        logger.info(`Token: ${maskToken(config.pat || config.apiKey)}`);
     }
 }
 main().catch((err) => {
-    console.error("Fatal error:", err);
+    logger.error("Fatal error", { error: String(err) });
     process.exit(1);
 });
 //# sourceMappingURL=index.js.map

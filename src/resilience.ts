@@ -9,6 +9,8 @@
  * Source: integrations/mcp-forge-registry/forge_mcp_registry/api_resilience.py
  */
 
+import logger from "./logger.js";
+
 // ─── Expected API Response Shapes ────────────────────────────────────
 
 /** Keys expected in a Forge Pack detail object (from TypeScript types). */
@@ -123,12 +125,12 @@ export function validateAndLog(
   const { isValid, warnings } = validateDetailResponseShape(response);
 
   if (!isValid) {
-    console.error(`[Forge MCP] ${context} failed validation: ${warnings.join("; ")}`);
+    logger.error(`Validation failed for ${context}`, { warnings: warnings.join("; "), context });
     return { isValid: false, data: null, warnings };
   }
 
   if (warnings.length > 0) {
-    console.warn(`[Forge MCP] ${context} shape drift detected: ${warnings.join("; ")}`);
+    logger.warn(`Response shape drift detected for ${context}`, { warnings: warnings.join("; "), context });
   }
 
   return { isValid: true, data: response as Record<string, unknown>, warnings };
@@ -164,15 +166,20 @@ export async function exponentialBackoffRetry<T>(
 
       if (attempt < maxRetries) {
         const delayMs = Math.min(baseDelayMs * Math.pow(2, attempt), maxDelayMs);
-        console.warn(
-          `[Forge MCP] Attempt ${attempt + 1}/${maxRetries + 1} failed ` +
-          `(${lastError.name}). Retrying in ${delayMs}ms...`,
-        );
+        logger.warn(`Retry attempt ${attempt + 1}/${maxRetries + 1} failed`, {
+          attempt: attempt + 1,
+          maxRetries: maxRetries + 1,
+          errorName: lastError.name,
+          errorMessage: lastError.message,
+          retryDelayMs: delayMs,
+        });
         await sleep(delayMs);
       } else {
-        console.error(
-          `[Forge MCP] All ${maxRetries + 1} attempts failed: ${lastError.message}`,
-        );
+        logger.error(`All ${maxRetries + 1} attempts failed`, {
+          maxRetries: maxRetries + 1,
+          errorName: lastError.name,
+          errorMessage: lastError.message,
+        });
       }
     }
   }
@@ -191,12 +198,16 @@ export interface HealthStats {
   errors: number;
   errorRatePercent: number;
   validationWarnings: number;
+  cacheHits: number;
+  cacheMisses: number;
 }
 
 class ApiHealthTracker {
   private requestCount = 0;
   private errorCount = 0;
   private validationWarningCount = 0;
+  private cacheHitCount = 0;
+  private cacheMissCount = 0;
 
   recordRequest(success: boolean, validationWarnings = 0): void {
     this.requestCount++;
@@ -206,6 +217,14 @@ class ApiHealthTracker {
     if (validationWarnings > 0) {
       this.validationWarningCount += validationWarnings;
     }
+  }
+
+  recordCacheHit(): void {
+    this.cacheHitCount++;
+  }
+
+  recordCacheMiss(): void {
+    this.cacheMissCount++;
   }
 
   getStats(): HealthStats {
@@ -218,6 +237,8 @@ class ApiHealthTracker {
       errors: this.errorCount,
       errorRatePercent: Math.round(errorRate * 100) / 100,
       validationWarnings: this.validationWarningCount,
+      cacheHits: this.cacheHitCount,
+      cacheMisses: this.cacheMissCount,
     };
   }
 }
@@ -233,4 +254,14 @@ export function getHealthStats(): HealthStats {
 /** Record an API request outcome. */
 export function recordHealth(success: boolean, validationWarnings = 0): void {
   healthTracker.recordRequest(success, validationWarnings);
+}
+
+/** Record a cache hit. */
+export function recordCacheHit(): void {
+  healthTracker.recordCacheHit();
+}
+
+/** Record a cache miss. */
+export function recordCacheMiss(): void {
+  healthTracker.recordCacheMiss();
 }

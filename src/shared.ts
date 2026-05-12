@@ -19,7 +19,11 @@ import {
   validateAndLog,
   exponentialBackoffRetry,
   recordHealth,
+  recordCacheHit,
+  recordCacheMiss,
 } from "./resilience.js";
+import { shouldCache, getCacheForPath } from "./cache.js";
+import logger from "./logger.js";
 
 // ─── ForgeTool Type ───────────────────────────────────────────────────
 
@@ -156,6 +160,19 @@ export async function forgeFetch<T = unknown>(
     ...(options.headers as Record<string, string> | undefined),
   };
 
+  // ── Cache Check ─────────────────────────────────────────────────────
+  const method = (options.method ?? "GET").toUpperCase();
+  const shouldCheckCache = shouldCache(method, path);
+  if (shouldCheckCache) {
+    const cache = getCacheForPath(path);
+    const cached = cache.get(path);
+    if (cached !== undefined) {
+      recordCacheHit();
+      return cached as ForgeResponse<T>;
+    }
+    recordCacheMiss();
+  }
+
   const fetchFn = async (): Promise<ForgeResponse<T>> => {
     const res = await fetch(url, { ...options, headers });
 
@@ -205,10 +222,18 @@ export async function forgeFetch<T = unknown>(
   };
 
   try {
-    return await exponentialBackoffRetry(fetchFn, {
+    const result = await exponentialBackoffRetry(fetchFn, {
       maxRetries: 2,
       baseDelayMs: 100,
     });
+
+    // ── Cache Store ──────────────────────────────────────────────
+    if (shouldCheckCache) {
+      const cache = getCacheForPath(path);
+      cache.set(path, result);
+    }
+
+    return result;
   } catch (err) {
     recordHealth(false, 0);
     throw err;
@@ -352,9 +377,9 @@ export function createMCPToolSchemas(
       },
     },
     {
-      name: "get_xp",
+      name: "forge_get_agent",
       description:
-        "Get the current XP, level, and level progress for a specific agent. Requires authentication.",
+        "Get full details for a specific agent including XP, level, stats, rarity, and fusion history. Requires authentication.",
       inputSchema: {
         type: "object",
         properties: {
@@ -365,6 +390,22 @@ export function createMCPToolSchemas(
           },
         },
         required: ["agentId"],
+      },
+    },
+    {
+      name: "forge_list_leaderboard",
+      description:
+        "List top Agent Packs sorted by trust score — the Forge leaderboard. Shows the highest-rated and most trusted packs.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          limit: {
+            type: "integer",
+            description:
+              "Maximum number of leaderboard entries to return (default: 20)",
+            default: 20,
+          },
+        },
       },
     },
     {
@@ -546,8 +587,10 @@ export function createToolHandlers(
     CallToolRequestSchema,
     async (request) => {
       const { name, arguments: args } = request.params;
+      const startTime = Date.now();
 
-      switch (name) {
+      try {
+        switch (name) {
         // ── forge_list_packs ─────────────────────────────────────────
         case "forge_list_packs": {
           const catalogOnly = args?.catalogOnly !== false;
@@ -730,9 +773,9 @@ export function createToolHandlers(
           };
         }
 
-        // ── get_xp ────────────────────────────────────────────────
-        case "get_xp": {
-          authFn("get_xp");
+        // ── forge_get_agent ────────────────────────────────────────────────
+        case "forge_get_agent": {
+          authFn("forge_get_agent");
           const agentIdXp = String(args?.agentId ?? "");
           if (!agentIdXp)
             throw new Error("agentId is required");
@@ -746,6 +789,29 @@ export function createToolHandlers(
               jsonContent(agent),
               textContent(
                 `📊 XP details retrieved for ${agentIdXp}. See above for full stats.`,
+              ),
+            ],
+          };
+        }
+
+        // ── forge_list_leaderboard ────────────────────────────────────
+        case "forge_list_leaderboard": {
+          const limit = Number(args?.limit ?? 20);
+
+          const params = new URLSearchParams();
+          params.set("sort", "trust-desc");
+          params.set("catalog", "1");
+
+          const data = await fetchFn(`/packs?${params.toString()}`);
+          const packs = (data as Record<string, unknown>)
+            ?.packs as unknown[] | undefined;
+          const topPacks = packs?.slice(0, limit) ?? [];
+
+          return {
+            content: [
+              jsonContent(data),
+              textContent(
+                `🏆 Top ${topPacks.length} packs by trust score. Use forge_get_pack to see details on any pack.`,
               ),
             ],
           };
@@ -876,6 +942,10 @@ export function createToolHandlers(
 
         default:
           throw new Error(`Unknown tool: ${name}`);
+        }
+      } finally {
+        const durationMs = Date.now() - startTime;
+        logger.info("Tool called", { tool: name, durationMs });
       }
     },
   );

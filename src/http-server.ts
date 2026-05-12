@@ -16,7 +16,8 @@
  *   open_pack               — Open/reveal a new agent from a pack
  *   chat_with_agent         — Chat with an agent in a session
  *   fuse_agents             — Fuse two agents (synthesis)
- *   get_xp                  — Get XP/level info for an agent
+ *   forge_get_agent         — Get full agent details (XP, level, stats)
+ *   forge_list_leaderboard  — List top packs by trust score
  *   subscribe_tier          — Get subscription tier info
  *   deploy_agent_to_telegram — Deploy an agent to Telegram webhook
  *   get_magic_link          — Request a magic link for email auth
@@ -43,6 +44,9 @@ import {
   hasAuth,
 } from "./shared.js";
 import { getHealthStats } from "./resilience.js";
+import { packsCache, agentsCache, profileCache } from "./cache.js";
+import { autoDiscovery } from "./discovery.js";
+import logger from "./logger.js";
 
 // ─── Config ─────────────────────────────────────────────────────
 
@@ -79,6 +83,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ─── Request Logging Middleware ───────────────────────────────────
+
+app.use((req, _res, next) => {
+  logger.info("HTTP request", {
+    method: req.method,
+    path: req.path,
+    ip: req.ip,
+  });
+  next();
+});
+
 // ─── HTTP Transport ──────────────────────────────────────────────
 
 /**
@@ -98,7 +113,7 @@ app.post("/mcp", async (req, res) => {
   try {
     await mcpTransport.handleRequest(req, res, req.body);
   } catch (err) {
-    console.error("[Forge MCP] MCP handler error:", err);
+    logger.error("MCP handler error", { error: String(err) });
     if (!res.headersSent) {
       res.status(500).json({ error: "Internal server error" });
     }
@@ -117,6 +132,11 @@ app.get("/health", (_req, res) => {
     forgeApi: cfg.baseUrl,
     auth: hasAuth() ? "configured" : "not configured",
     health,
+    cache: {
+      packs: packsCache.stats(),
+      agents: agentsCache.stats(),
+      profile: profileCache.stats(),
+    },
   });
 });
 
@@ -142,26 +162,44 @@ async function startServer() {
   await server.connect(mcpTransport);
 
   const serverInstance = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Forge MCP (HTTP) running on port ${PORT}`);
-    console.log(`   API Base: ${cfg.baseUrl}`);
-    console.log(`   Auth: ${hasAuth() ? "configured" : "NOT configured — read-only only"}`);
+    logger.info(`Forge MCP (HTTP) running on port ${PORT}`);
+    logger.info(`API Base: ${cfg.baseUrl}`);
+    const authStatus = hasAuth() ? "configured" : "NOT configured — read-only only";
+    logger.info(`Auth: ${authStatus}`);
     if (hasAuth()) {
-      console.log(`   Token: ${maskToken(cfg.pat || cfg.apiKey)}`);
+      logger.info(`Token: ${maskToken(cfg.pat || cfg.apiKey)}`);
     }
-    console.log(`   Health: http://0.0.0.0:${PORT}/health`);
-    console.log(`   Tools:  http://0.0.0.0:${PORT}/health/tools`);
+    logger.info(`Health: http://0.0.0.0:${PORT}/health`);
+    logger.info(`Tools:  http://0.0.0.0:${PORT}/health/tools`);
+
+    // Run auto-discovery in background (don't block startup)
+    autoDiscovery().then((result) => {
+      if (result.uncoveredEndpoints.length > 0) {
+        logger.info("Auto-discovery complete — uncovered endpoints", {
+          count: result.uncoveredEndpoints.length,
+          endpoints: result.uncoveredEndpoints,
+        });
+      } else {
+        logger.info("Auto-discovery complete — all endpoints covered");
+      }
+      if (result.openApiSpecFound) {
+        logger.info("OpenAPI spec found at Forge API");
+      }
+    }).catch((err) => {
+      logger.warn("Auto-discovery failed", { error: String(err) });
+    });
   });
 
   // Graceful shutdown
   const shutdown = (signal: string) => {
-    console.log(`\n[Forge MCP] ${signal} received — shutting down...`);
+    logger.info(`${signal} received — shutting down...`);
     serverInstance.close(() => {
-      console.log("[Forge MCP] HTTP server closed");
+      logger.info("HTTP server closed");
       process.exit(0);
     });
     // Force exit after 5s if graceful shutdown hangs
     setTimeout(() => {
-      console.error("[Forge MCP] Forced exit after timeout");
+      logger.error("Forced exit after timeout");
       process.exit(1);
     }, 5000);
   };

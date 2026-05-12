@@ -3,7 +3,7 @@
  *
  * Starts the compiled server as a subprocess and verifies that the MCP
  * contract is valid: resources/list, tools/list, prompts/list all return
- * expected schemas.
+ * expected schemas with strict type and content assertions.
  *
  * Usage: node tests/smoke.mjs
  * Prerequisite: npm run build
@@ -17,6 +17,12 @@ import path from "node:path";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER = path.resolve(__dirname, "..", "build", "index.js");
 
+// ── Helpers ────────────────────────────────────────────────────────
+
+const VALID_JSON_SCHEMA_TYPES = new Set([
+  "string", "boolean", "integer", "number", "array", "object",
+]);
+
 /**
  * Send a JSON-RPC request to the MCP server and return the parsed response.
  * Starts a fresh subprocess for each request (stdio transport).
@@ -27,7 +33,8 @@ function sendRequest(method, params = {}) {
       stdio: ["pipe", "pipe", "pipe"],
       env: {
         ...process.env,
-        FORGE_API_BASE_URL: process.env.FORGE_API_BASE_URL || "https://forge.tekup.dk/api/forge",
+        FORGE_API_BASE_URL:
+          process.env.FORGE_API_BASE_URL || "https://forge.tekup.dk/api/forge",
       },
     });
 
@@ -56,11 +63,20 @@ function sendRequest(method, params = {}) {
         const lines = stdout.trim().split("\n").filter(Boolean);
         const last = lines[lines.length - 1];
         if (!last) {
-          return reject(new Error(`No output. Exit code: ${code}\nStderr:\n${stderr}`));
+          return reject(
+            new Error(`No output. Exit code: ${code}\nStderr:\n${stderr}`)
+          );
         }
         resolve({ result: JSON.parse(last), stderr });
       } catch (e) {
-        reject(new Error(`Parse error: ${e.message}\nStdout: ${stdout.slice(0, 500)}\nStderr: ${stderr.slice(0, 500)}`));
+        reject(
+          new Error(
+            `Parse error: ${e.message}\nStdout: ${stdout.slice(
+              0,
+              500
+            )}\nStderr: ${stderr.slice(0, 500)}`
+          )
+        );
       }
     });
 
@@ -92,18 +108,62 @@ async function main() {
   const res = await sendRequest("resources/list");
   const resources = res.result?.result?.resources;
   check(Array.isArray(resources), "resources is an array");
-  check(resources.length >= 3, "at least 3 resources");
-  const resourceUris = resources.map((r) => r.uri);
-  check(resourceUris.includes("forge://packs"), "forge://packs present");
-  check(resourceUris.includes("forge://agents"), "forge://agents present");
-  check(resourceUris.includes("forge://user/profile"), "forge://user/profile present");
+  check(resources.length === 3, "exactly 3 resources");
 
-  // Verify resource schema
+  const resourceUris = resources.map((r) => r.uri);
+  const resourceNames = resources.map((r) => r.name);
+
+  const expectedResourceUris = [
+    "forge://packs",
+    "forge://agents",
+    "forge://user/profile",
+  ];
+  const expectedResourceNames = [
+    "Agent Packs Catalog",
+    "My Agents",
+    "User Profile",
+  ];
+
+  // Exact set match for URIs
+  check(
+    JSON.stringify([...resourceUris].sort()) ===
+      JSON.stringify([...expectedResourceUris].sort()),
+    "all 3 resource URIs exactly match expected set"
+  );
+
+  // Exact set match for names
+  check(
+    JSON.stringify([...resourceNames].sort()) ===
+      JSON.stringify([...expectedResourceNames].sort()),
+    "all 3 resource names exactly match expected set"
+  );
+
+  // Verify each URI uses the forge:// scheme
+  for (const uri of resourceUris) {
+    check(uri.startsWith("forge://"), `resource URI "${uri}" starts with forge://`);
+  }
+
+  // Individual URI presence (backward compat)
+  check(resourceUris.includes("forge://packs"), 'forge://packs present');
+  check(resourceUris.includes("forge://agents"), 'forge://agents present');
+  check(resourceUris.includes("forge://user/profile"), 'forge://user/profile present');
+
+  // Verify resource schema in detail
   for (const r of resources) {
     check(typeof r.uri === "string", `resource ${r.uri} has string uri`);
     check(typeof r.name === "string", `resource ${r.uri} has string name`);
-    check(typeof r.description === "string", `resource ${r.uri} has string description`);
-    check(r.mimeType === "application/json", `resource ${r.uri} has mimeType`);
+    check(
+      typeof r.description === "string",
+      `resource ${r.uri} has string description`
+    );
+    check(
+      r.description.length > 0,
+      `resource ${r.uri} has non-empty description`
+    );
+    check(
+      r.mimeType === "application/json",
+      `resource ${r.uri} has mimeType application/json`
+    );
   }
 
   // ── 2. tools/list ──────────────────────────────────────────────
@@ -111,24 +171,77 @@ async function main() {
   const toolRes = await sendRequest("tools/list");
   const tools = toolRes.result?.result?.tools;
   check(Array.isArray(tools), "tools is an array");
-  check(tools.length === 9, "exactly 9 tools");
+  check(tools.length === 10, "exactly 10 tools");
 
   const toolNames = tools.map((t) => t.name);
   const expectedTools = [
-    "forge_list_packs", "forge_get_pack", "open_pack", "chat_with_agent", "fuse_agents",
-    "get_xp", "subscribe_tier", "deploy_agent_to_telegram", "get_magic_link",
+    "forge_list_packs",
+    "forge_get_pack",
+    "open_pack",
+    "chat_with_agent",
+    "fuse_agents",
+    "forge_get_agent",
+    "forge_list_leaderboard",
+    "subscribe_tier",
+    "deploy_agent_to_telegram",
+    "get_magic_link",
   ];
+
+  // Exact set match for tool names
+  check(
+    JSON.stringify([...toolNames].sort()) ===
+      JSON.stringify([...expectedTools].sort()),
+    "all 10 tool names exactly match expected set"
+  );
+
+  // Individual presence checks (backward compat)
   for (const name of expectedTools) {
     check(toolNames.includes(name), `tool "${name}" present`);
   }
 
-  // Verify tool schema
+  // Verify tool schema in detail
   for (const t of tools) {
     check(typeof t.name === "string", `tool ${t.name} has string name`);
-    check(typeof t.description === "string", `tool ${t.name} has string description`);
-    check(t.inputSchema?.type === "object", `tool ${t.name} has inputSchema`);
-    if (t.inputSchema?.properties) {
-      check(typeof t.inputSchema.properties === "object", `tool ${t.name} has properties`);
+    check(
+      typeof t.description === "string",
+      `tool ${t.name} has string description`
+    );
+    check(
+      t.description.length > 0,
+      `tool ${t.name} has non-empty description`
+    );
+    check(
+      t.inputSchema?.type === "object",
+      `tool ${t.name} has inputSchema with type "object"`
+    );
+
+    // Verify each property has valid JSON Schema type and description
+    const props = t.inputSchema?.properties;
+    check(
+      props !== undefined && typeof props === "object",
+      `tool ${t.name} has inputSchema.properties as object`
+    );
+
+    if (props && typeof props === "object") {
+      for (const [propName, propSchema] of Object.entries(props)) {
+        check(
+          typeof propSchema === "object" && propSchema !== null,
+          `tool ${t.name}.${propName} has a schema object`
+        );
+        check(
+          typeof propSchema.type === "string" &&
+            VALID_JSON_SCHEMA_TYPES.has(propSchema.type),
+          `tool ${t.name}.${propName} has valid type "${propSchema.type}"`
+        );
+        check(
+          typeof propSchema.description === "string",
+          `tool ${t.name}.${propName} has string description`
+        );
+        check(
+          propSchema.description.length > 0,
+          `tool ${t.name}.${propName} has non-empty description`
+        );
+      }
     }
   }
 
@@ -141,20 +254,64 @@ async function main() {
 
   const promptNames = prompts.map((p) => p.name);
   const expectedPrompts = ["agent_card", "pack_summary", "fusion_guide"];
+
+  // Exact set match for prompt names
+  check(
+    JSON.stringify([...promptNames].sort()) ===
+      JSON.stringify([...expectedPrompts].sort()),
+    "all 3 prompt names exactly match expected set"
+  );
+
+  // Individual presence checks (backward compat)
   for (const name of expectedPrompts) {
     check(promptNames.includes(name), `prompt "${name}" present`);
   }
 
-  // Verify prompt schema
+  // Verify prompt schema in detail
   for (const p of prompts) {
     check(typeof p.name === "string", `prompt ${p.name} has string name`);
-    check(typeof p.description === "string", `prompt ${p.name} has string description`);
-    check(Array.isArray(p.arguments), `prompt ${p.name} has arguments array`);
+    check(
+      typeof p.description === "string",
+      `prompt ${p.name} has string description`
+    );
+    check(
+      p.description.length > 0,
+      `prompt ${p.name} has non-empty description`
+    );
+    check(
+      Array.isArray(p.arguments),
+      `prompt ${p.name} has arguments array`
+    );
+
+    // Verify each argument has valid schema
+    if (Array.isArray(p.arguments)) {
+      for (const arg of p.arguments) {
+        check(
+          typeof arg === "object" && arg !== null && !Array.isArray(arg),
+          `prompt ${p.name} argument is an object`
+        );
+        check(
+          typeof arg.name === "string" && arg.name.length > 0,
+          `prompt ${p.name} argument "${arg.name}" has valid name`
+        );
+        check(
+          typeof arg.description === "string" && arg.description.length > 0,
+          `prompt ${p.name} argument "${arg.name}" has valid description`
+        );
+        check(
+          typeof arg.required === "boolean",
+          `prompt ${p.name} argument "${arg.name}" has boolean required`
+        );
+      }
+    }
   }
 
   // ── Summary ─────────────────────────────────────────────────────
+  const total = passed + failed;
   console.log(`\n${"=".repeat(50)}`);
-  console.log(`Smoke test results: ${passed} passed, ${failed} failed`);
+  console.log(
+    `Smoke test results: ${passed} passed, ${failed} failed (${total} total assertions)`
+  );
   console.log(`${"=".repeat(50)}`);
 
   if (failed > 0) {
