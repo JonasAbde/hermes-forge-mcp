@@ -22,6 +22,9 @@ import {
   recordCacheHit,
   recordCacheMiss,
 } from "./resilience.js";
+
+/** Default timeout for Forge API calls (15 seconds). */
+const FORGE_FETCH_TIMEOUT_MS = 15_000;
 import { shouldCache, getCacheForPath } from "./cache.js";
 import logger from "./logger.js";
 
@@ -174,51 +177,69 @@ export async function forgeFetch<T = unknown>(
   }
 
   const fetchFn = async (): Promise<ForgeResponse<T>> => {
-    const res = await fetch(url, { ...options, headers });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FORGE_FETCH_TIMEOUT_MS);
 
-    if (!res.ok) {
-      // For 5xx errors, retry with backoff
-      if (res.status >= 500) {
-        throw new Error(`Forge API ${res.status} error: ${res.statusText}`);
+    try {
+      const res = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        // For 5xx errors, retry with backoff
+        if (res.status >= 500) {
+          throw new Error(`Forge API ${res.status} error: ${res.statusText}`);
+        }
+        // For 4xx errors, throw immediately (auth issues, bad requests)
+        const body = await res.text();
+        let detail = body;
+        try {
+          const parsed = JSON.parse(body);
+          detail = parsed.error ?? parsed.detail ?? body;
+        } catch {
+          // keep raw body
+        }
+        throw new Error(safeErrorMessage("forgeFetch", String(detail)));
       }
-      // For 4xx errors, throw immediately (auth issues, bad requests)
-      const body = await res.text();
-      let detail = body;
-      try {
-        const parsed = JSON.parse(body);
-        detail = parsed.error ?? parsed.detail ?? body;
-      } catch {
-        // keep raw body
+
+      const body = await res.json();
+
+      // Validate response shape if requested (for known contracts)
+      if (validateResponse) {
+        const { isValid, warnings } = validateAndLog(body, path);
+        recordHealth(isValid, warnings.length);
+        if (!isValid) {
+          throw new Error(
+            safeErrorMessage(
+              "forgeFetch",
+              `API response shape validation failed for ${path}. The API contract may have changed. ` +
+                `Warnings: ${warnings.join("; ")}`,
+            ),
+          );
+        }
       }
-      throw new Error(safeErrorMessage("forgeFetch", String(detail)));
-    }
 
-    const body = await res.json();
+      if ((body as Record<string, unknown>).status === "error") {
+        const detail =
+          (body as Record<string, unknown>).error ??
+          (body as Record<string, unknown>).detail ??
+          "Forge API error";
+        throw new Error(safeErrorMessage("forgeFetch", String(detail)));
+      }
 
-    // Validate response shape if requested (for known contracts)
-    if (validateResponse) {
-      const { isValid, warnings } = validateAndLog(body, path);
-      recordHealth(isValid, warnings.length);
-      if (!isValid) {
+      return body as ForgeResponse<T>;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
         throw new Error(
-          safeErrorMessage(
-            "forgeFetch",
-            `API response shape validation failed for ${path}. The API contract may have changed. ` +
-              `Warnings: ${warnings.join("; ")}`,
-          ),
+          `Forge API request timed out after ${FORGE_FETCH_TIMEOUT_MS}ms: ${url}`,
         );
       }
+      throw err;
+    } finally {
+      clearTimeout(timer);
     }
-
-    if ((body as Record<string, unknown>).status === "error") {
-      const detail =
-        (body as Record<string, unknown>).error ??
-        (body as Record<string, unknown>).detail ??
-        "Forge API error";
-      throw new Error(safeErrorMessage("forgeFetch", String(detail)));
-    }
-
-    return body as ForgeResponse<T>;
   };
 
   try {

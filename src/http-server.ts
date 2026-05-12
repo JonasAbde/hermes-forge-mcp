@@ -30,6 +30,7 @@
 
 import express from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
@@ -82,6 +83,21 @@ const app = express();
 // CORS — allow any origin for MCP clients (Claude Desktop, Cursor, etc.)
 app.use(cors());
 app.use(express.json());
+
+// ─── Rate Limiting ────────────────────────────────────────────────
+
+/** Rate limit: 100 requests per 15 minutes per IP. */
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests — rate limit exceeded" },
+});
+app.use("/mcp", limiter);
+
+// Health endpoints are NOT rate-limited so monitoring always works
+app.use("/health", (_req, _res, next) => next());
 
 // ─── Request Logging Middleware ───────────────────────────────────
 
