@@ -821,7 +821,7 @@ export function createToolHandlers(
                 method: "POST",
                 body: JSON.stringify({
                   agentId,
-                  model: model ?? agentId,
+                  model: model ?? 'hermes-agent',
                   title: `Chat with ${agentId}`,
                   metadata: {
                     active_pack_ids: [agentId],
