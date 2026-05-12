@@ -39,7 +39,22 @@ case "$STATE" in
 esac
 
 # ── Resolve GITHUB_TOKEN ───────────────────────────────────────────────────────
+# Priority: env var > gh CLI (JonasAbde) > hermes token file
 if [ -z "${GITHUB_TOKEN:-}" ]; then
+  # Try gh CLI (JonasAbde's active account — repo owner)
+  GH_TOKEN=$(python3 -c "
+import yaml
+with open('$HOME/.config/gh/hosts.yml') as f:
+    data = yaml.safe_load(f)
+print(data['github.com']['users']['JonasAbde']['oauth_token'])
+" 2>/dev/null || true)
+  if [ -n "$GH_TOKEN" ]; then
+    GITHUB_TOKEN="$GH_TOKEN"
+  fi
+fi
+
+if [ -z "${GITHUB_TOKEN:-}" ]; then
+  # Fallback to hermes token file
   TOKEN_FILE="$HOME/.hermes/github-hermes-token"
   if [ -f "$TOKEN_FILE" ]; then
     GITHUB_TOKEN="$(grep -oP '(?<=^GITHUB_TOKEN=).*' "$TOKEN_FILE" 2>/dev/null || true)"
@@ -47,7 +62,7 @@ if [ -z "${GITHUB_TOKEN:-}" ]; then
 fi
 
 if [ -z "${GITHUB_TOKEN:-}" ]; then
-  echo "❌ No GITHUB_TOKEN found (set env or ~/.hermes/github-hermes-token)"
+  echo "❌ No GITHUB_TOKEN found (checked env, gh CLI, and ~/.hermes/github-hermes-token)"
   exit 1
 fi
 
