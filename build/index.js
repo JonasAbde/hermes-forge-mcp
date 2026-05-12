@@ -26,7 +26,7 @@ import logger from "./logger.js";
 // ─── MCP Server ──────────────────────────────────────────────────
 const server = new Server({
     name: "forge-mcp",
-    version: "1.0.0",
+    version: "2.0.0",
 }, {
     capabilities: {
         resources: {},
