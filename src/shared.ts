@@ -27,6 +27,14 @@ import {
 const FORGE_FETCH_TIMEOUT_MS = 15_000;
 import { shouldCache, getCacheForPath } from "./cache.js";
 import logger from "./logger.js";
+import {
+  analyzeChat,
+  getOrCreateEvolutionState,
+  getEvolutionState,
+  recordFusion,
+  getLineage,
+  getFamilyTree,
+} from "./evolution.js";
 
 // ─── ForgeTool Type ───────────────────────────────────────────────────
 
@@ -490,6 +498,45 @@ export function createMCPToolSchemas(
         required: ["email"],
       },
     },
+    // ── Evolution Tools ───────────────────────────────────────
+    {
+      name: "forge_agent_traits",
+      description:
+        "List all unlocked traits, abilities, and evolution progress for an agent. Shows chat topic frequencies and evolution stage. Requires authentication.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          agentId: {
+            type: "string",
+            description:
+              "The ID of the agent to query for evolution state",
+          },
+        },
+        required: ["agentId"],
+      },
+    },
+    {
+      name: "forge_agent_lineage",
+      description:
+        "View the fusion genealogy (family tree) for an agent — fusion history, parent agents, children, and lineage depth. Requires authentication.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          agentId: {
+            type: "string",
+            description:
+              "The ID of the agent to view lineage for",
+          },
+          generations: {
+            type: "integer",
+            description:
+              "How many generations of ancestors/descendants to show (default: 3, max: 10)",
+            default: 3,
+          },
+        },
+        required: ["agentId"],
+      },
+    },
   ];
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -532,6 +579,20 @@ export function createResourceHandlers(
           name: "User Profile",
           description:
             "Get the authenticated user's profile information",
+          mimeType: "application/json",
+        },
+        {
+          uri: "forge://agents/{agentId}/evolution",
+          name: "Agent Evolution State",
+          description:
+            "Get the evolution state, unlocked traits, and topic progress for a specific agent",
+          mimeType: "application/json",
+        },
+        {
+          uri: "forge://agents/{agentId}/lineage",
+          name: "Agent Lineage / Genealogy",
+          description:
+            "View the fusion genealogy (family tree) for a specific agent",
           mimeType: "application/json",
         },
       ],
@@ -585,8 +646,63 @@ export function createResourceHandlers(
           };
         }
 
-        default:
+        default: {
+          // Check for evolution resource URI pattern
+          const evoMatch = uri.match(
+            /^forge:\/\/agents\/([^/]+)\/evolution$/,
+          );
+          if (evoMatch) {
+            authFn(uri);
+            const agentId = evoMatch[1];
+            const evoState = getEvolutionState(agentId);
+            return {
+              contents: [
+                {
+                  uri,
+                  mimeType: "application/json",
+                  text: JSON.stringify(
+                    evoState ?? {
+                      agentId,
+                      message:
+                        "No evolution data found for this agent",
+                    },
+                    null,
+                    2,
+                  ),
+                },
+              ],
+            };
+          }
+
+          // Check for lineage resource URI pattern
+          const lineageMatch = uri.match(
+            /^forge:\/\/agents\/([^/]+)\/lineage$/,
+          );
+          if (lineageMatch) {
+            authFn(uri);
+            const agentId = lineageMatch[1];
+            const lineage = getLineage(agentId);
+            return {
+              contents: [
+                {
+                  uri,
+                  mimeType: "application/json",
+                  text: JSON.stringify(
+                    lineage ?? {
+                      agentId,
+                      message:
+                        "No lineage data found for this agent. Fuse agents to create a lineage!",
+                    },
+                    null,
+                    2,
+                  ),
+                },
+              ],
+            };
+          }
+
           throw new Error(`Unknown resource URI: ${uri}`);
+        }
       }
     },
   );
@@ -739,18 +855,57 @@ export function createToolHandlers(
             `/v1/chat/sessions/${sid}`,
           );
 
-          return {
-            content: [
-              jsonContent({
-                sessionId: sid,
-                message: msgRes,
-                session,
-              }),
-              textContent(
-                `💬 Message sent to agent ${agentId} (session: ${sid}). 25 XP rewarded!`,
-              ),
-            ],
-          };
+          // ── Evolution: Analyze chat for topic unlocks ─────────────
+          try {
+            getOrCreateEvolutionState(agentId);
+            const newTraits = analyzeChat(agentId, message, 1);
+            const evoState = getEvolutionState(agentId);
+
+            let evoMsg = "";
+            if (newTraits.length > 0) {
+              evoMsg = `\n🧬 **Evolution!** Agent unlocked: ${newTraits.map((t) => t.name).join(", ")}!`;
+            }
+            if (evoState && evoState.traits.length >= 2 && evoState.evolutionStage > 0) {
+              evoMsg += `\n✨ Evolution Stage: ${evoState.evolutionStage} (${evoState.traits.length} traits unlocked)`;
+            }
+
+            return {
+              content: [
+                jsonContent({
+                  sessionId: sid,
+                  message: msgRes,
+                  session,
+                  evolution: evoState
+                    ? {
+                        traits: evoState.traits,
+                        stage: evoState.evolutionStage,
+                        topicProgress: evoState.topicCounters,
+                      }
+                    : undefined,
+                }),
+                textContent(
+                  `💬 Message sent to agent ${agentId} (session: ${sid}). 25 XP rewarded!${evoMsg}`,
+                ),
+              ],
+            };
+          } catch (evoErr) {
+            logger.warn("Evolution analysis failed", {
+              error: String(evoErr),
+            });
+            // Fall back to normal response if evolution fails
+            return {
+              content: [
+                jsonContent({
+                  sessionId: sid,
+                  message: msgRes,
+                  session,
+                }),
+                textContent(
+                  `💬 Message sent to agent ${agentId} (session: ${sid}). 25 XP rewarded!`,
+                ),
+              ],
+            };
+          }
         }
 
         // ── fuse_agents ─────────────────────────────────────────────
@@ -783,6 +938,21 @@ export function createToolHandlers(
             .result as string;
           const isSuccess = result === "success";
           const emoji = isSuccess ? "✨" : "💥";
+
+          // ── Genealogy: Record fusion in lineage ──────────────────
+          try {
+            recordFusion({
+              baseAgentId,
+              fodderAgentId,
+              baseName: baseAgentId,
+              fodderName: fodderAgentId,
+              success: isSuccess,
+            });
+          } catch (geneErr) {
+            logger.warn("Genealogy recording failed", {
+              error: String(geneErr),
+            });
+          }
 
           return {
             content: [
@@ -961,6 +1131,89 @@ export function createToolHandlers(
           };
         }
 
+        // ── forge_agent_traits ─────────────────────────────────────
+        case "forge_agent_traits": {
+          authFn("forge_agent_traits");
+          const traitAgentId = String(args?.agentId ?? "");
+          if (!traitAgentId)
+            throw new Error("agentId is required");
+
+          const evoState = getEvolutionState(traitAgentId);
+
+          if (!evoState || evoState.traits.length === 0) {
+            return {
+              content: [
+                jsonContent({
+                  agentId: traitAgentId,
+                  traits: [],
+                  evolutionStage: 0,
+                  totalChats: 0,
+                  message:
+                    "This agent has not yet unlocked any traits. Chat with it about different topics to unlock abilities!",
+                }),
+                textContent(
+                  `🧬 Agent ${traitAgentId} has not evolved yet. Keep chatting to unlock traits!`,
+                ),
+              ],
+            };
+          }
+
+          return {
+            content: [
+              jsonContent({
+                agentId: traitAgentId,
+                traits: evoState.traits,
+                evolutionStage: evoState.evolutionStage,
+                totalChats: evoState.totalChats,
+                topicProgress: evoState.topicCounters,
+              }),
+              textContent(
+                `🧬 **${traitAgentId} Evolution**\n` +
+                  `Stage: ${evoState.evolutionStage}\n` +
+                  `Traits: ${evoState.traits.length} unlocked\n` +
+                  `Chats: ${evoState.totalChats}\n` +
+                  `Evolved: ${evoState.lastEvolvedAt ? new Date(evoState.lastEvolvedAt).toLocaleDateString() : "Never"}`,
+              ),
+            ],
+          };
+        }
+
+        // ── forge_agent_lineage ────────────────────────────────────
+        case "forge_agent_lineage": {
+          authFn("forge_agent_lineage");
+          const lineageAgentId = String(args?.agentId ?? "");
+          const generations = Math.min(
+            Number(args?.generations ?? 3),
+            10,
+          );
+          if (!lineageAgentId)
+            throw new Error("agentId is required");
+
+          const lineage = getLineage(lineageAgentId);
+          const tree = getFamilyTree(lineageAgentId, generations);
+
+          return {
+            content: [
+              jsonContent({
+                agentId: lineageAgentId,
+                lineage,
+                familyTree: {
+                  ancestors: tree.ancestors.length,
+                  descendants: tree.descendants.length,
+                  totalGenerations: generations,
+                },
+              }),
+              textContent(
+                `🌳 **${lineageAgentId} Genealogy**\n` +
+                  `Fusions: ${lineage?.fusionRecords.length ?? 0}\n` +
+                  `Ancestors: ${tree.ancestors.length} gen.\n` +
+                  `Descendants: ${tree.descendants.length} gen.\n` +
+                  `Created: ${tree.createdAt ? new Date(tree.createdAt).toLocaleDateString() : "Unknown"}`,
+              ),
+            ],
+          };
+        }
+
         default:
           throw new Error(`Unknown tool: ${name}`);
         }
@@ -1030,6 +1283,19 @@ export function createPromptHandlers(
               description:
                 "Optional: fodder agent ID to include specific fusion projections",
               required: false,
+            },
+          ],
+        },
+        {
+          name: "evolution_report",
+          description:
+            "Generate an evolution report for an agent — unlocked traits, evolution stage, topic frequencies, and fusion genealogy.",
+          arguments: [
+            {
+              name: "agentId",
+              description:
+                "The agent ID to generate the evolution report for",
+              required: true,
             },
           ],
         },
@@ -1227,6 +1493,52 @@ Success   Fracture (15%)
 +1 Level   Level 1, 0 XP
 +Bonus XP  Stats preserved
 \`\`\``,
+                },
+              },
+            ],
+          };
+        }
+
+        case "evolution_report": {
+          const evoAgentId = String(args?.agentId ?? "");
+          if (!evoAgentId)
+            throw new Error("agentId is required");
+
+          const evoState = getEvolutionState(evoAgentId);
+          const lineage = getLineage(evoAgentId);
+
+          const traitsSection =
+            evoState && evoState.traits.length > 0
+              ? `\n**Unlocked Traits:**\n${evoState.traits.map((t) => `- ${t.name}: ${t.description}`).join("\n")}`
+              : "\n**No traits unlocked yet.** Chat with this agent about various topics to unlock abilities!";
+
+          const topicSection =
+            evoState && evoState.topicCounters.length > 0
+              ? `\n**Topic Progress:**\n${evoState.topicCounters.map((t) => `- ${t.topic}: ${t.count} mentions`).join("\n")}`
+              : "";
+
+          const lineageSection =
+            lineage && lineage.fusionRecords.length > 0
+              ? `\n**Fusion Genealogy:**\n${lineage.fusionRecords.map((r) => `- ${r.success ? "✅" : "💥"} ${r.baseName} + ${r.fodderName} (${new Date(r.timestamp).toLocaleDateString()})`).join("\n")}`
+              : "\n**No fusion history yet.** Fuse agents to build a lineage!";
+
+          return {
+            messages: [
+              {
+                role: "user",
+                content: {
+                  type: "text",
+                  text: `## 🧬 Evolution Report: ${evoAgentId}
+
+**Evolution Stage:** ${evoState?.evolutionStage ?? 0}
+**Total Traits:** ${evoState?.traits.length ?? 0}
+**Total Chats:** ${evoState?.totalChats ?? 0}${traitsSection}${topicSection}${lineageSection}
+
+### Evolution Tips
+- Chat about **data analysis, code, storytelling, strategy, humor, or empathy** to unlock traits
+- Each trait needs **5 topic mentions** to unlock
+- Unlock **2 traits** to advance evolution stage
+- Higher evolution stages unlock **better fusion outcomes**`,
                 },
               },
             ],

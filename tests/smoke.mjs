@@ -107,9 +107,7 @@ async function main() {
   console.log("\n📋 Testing resources/list...");
   const res = await sendRequest("resources/list");
   const resources = res.result?.result?.resources;
-  check(Array.isArray(resources), "resources is an array");
-  check(resources.length === 3, "exactly 3 resources");
-
+  // ── Resource Validation ─────────────────────────────────────────
   const resourceUris = resources.map((r) => r.uri);
   const resourceNames = resources.map((r) => r.name);
 
@@ -117,25 +115,27 @@ async function main() {
     "forge://packs",
     "forge://agents",
     "forge://user/profile",
+    "forge://agents/{agentId}/evolution",
+    "forge://agents/{agentId}/lineage",
   ];
   const expectedResourceNames = [
     "Agent Packs Catalog",
     "My Agents",
     "User Profile",
+    "Agent Evolution State",
+    "Agent Lineage / Genealogy",
   ];
 
-  // Exact set match for URIs
+  check(resources.length === 5, "exactly 5 resources");
   check(
     JSON.stringify([...resourceUris].sort()) ===
       JSON.stringify([...expectedResourceUris].sort()),
-    "all 3 resource URIs exactly match expected set"
+    "all 5 resource URIs exactly match expected set"
   );
-
-  // Exact set match for names
   check(
     JSON.stringify([...resourceNames].sort()) ===
       JSON.stringify([...expectedResourceNames].sort()),
-    "all 3 resource names exactly match expected set"
+    "all 5 resource names exactly match expected set"
   );
 
   // Verify each URI uses the forge:// scheme
@@ -171,7 +171,7 @@ async function main() {
   const toolRes = await sendRequest("tools/list");
   const tools = toolRes.result?.result?.tools;
   check(Array.isArray(tools), "tools is an array");
-  check(tools.length === 10, "exactly 10 tools");
+  check(tools.length === 12, "exactly 12 tools");
 
   const toolNames = tools.map((t) => t.name);
   const expectedTools = [
@@ -185,13 +185,15 @@ async function main() {
     "subscribe_tier",
     "deploy_agent_to_telegram",
     "get_magic_link",
+    "forge_agent_traits",
+    "forge_agent_lineage",
   ];
 
   // Exact set match for tool names
   check(
     JSON.stringify([...toolNames].sort()) ===
       JSON.stringify([...expectedTools].sort()),
-    "all 10 tool names exactly match expected set"
+    "all 12 tool names exactly match expected set"
   );
 
   // Individual presence checks (backward compat)
@@ -250,16 +252,21 @@ async function main() {
   const promptRes = await sendRequest("prompts/list");
   const prompts = promptRes.result?.result?.prompts;
   check(Array.isArray(prompts), "prompts is an array");
-  check(prompts.length === 3, "exactly 3 prompts");
+  check(prompts.length === 4, "exactly 4 prompts");
 
   const promptNames = prompts.map((p) => p.name);
-  const expectedPrompts = ["agent_card", "pack_summary", "fusion_guide"];
+  const expectedPrompts = [
+    "agent_card",
+    "pack_summary",
+    "fusion_guide",
+    "evolution_report",
+  ];
 
-  // Exact set match for prompt names
+  // Exact set match
   check(
     JSON.stringify([...promptNames].sort()) ===
       JSON.stringify([...expectedPrompts].sort()),
-    "all 3 prompt names exactly match expected set"
+    "all 4 prompt names exactly match expected set"
   );
 
   // Individual presence checks (backward compat)
