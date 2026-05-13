@@ -4,6 +4,24 @@
   "description": "MCP server for the Hermes Forge platform — discover, open, chat with, fuse, and deploy AI Agent Packs via the Model Context Protocol",
   "type": "module",
   "main": "build/http-server.js",
+  "types": "build/http-server.d.ts",
+  "files": [
+    "build/",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JonasAbde/hermes-forge-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/JonasAbde/hermes-forge-mcp/issues"
+  },
+  "homepage": "https://github.com/JonasAbde/hermes-forge-mcp#readme",
   "scripts": {
     "build": "tsc",
     "start": "node build/http-server.js",

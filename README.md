@@ -5,6 +5,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-blue)](https://modelcontextprotocol.io)
 [![CI](https://github.com/JonasAbde/hermes-forge-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/JonasAbde/hermes-forge-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![npm](https://img.shields.io/npm/v/forge-mcp?color=blue&logo=npm)](https://www.npmjs.com/package/forge-mcp)
 
 **Forge MCP** is a [Model Context Protocol](https://modelcontextprotocol.io) server that bridges AI assistants to the **Hermes Forge** AI Agent Platform.
 
@@ -22,7 +23,13 @@ With Forge MCP, any MCP-compatible client (Claude Desktop, Cursor, Windsurf, etc
 
 ## Quick Start
 
-### Git clone
+### Install from npm (global CLI)
+
+```bash
+npm install -g forge-mcp
+```
+
+### Git clone (development)
 
 ```bash
 git clone https://github.com/JonasAbde/hermes-forge-mcp.git
