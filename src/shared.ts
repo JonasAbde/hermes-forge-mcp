@@ -240,9 +240,11 @@ export async function forgeFetch<T = unknown>(
       return body as ForgeResponse<T>;
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        throw new Error(
-          `Forge API request timed out after ${FORGE_FETCH_TIMEOUT_MS}ms: ${url}`,
+        logger.warn(
+          "Forge API request timed out",
+          { url, timeoutMs: FORGE_FETCH_TIMEOUT_MS },
         );
+        throw err;
       }
       throw err;
     } finally {
