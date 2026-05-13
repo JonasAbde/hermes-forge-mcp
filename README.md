@@ -1,3 +1,5 @@
+<p align="center"><img src=".github/forge-wordmark.svg" alt="Hermes Forge" width="400"/></p>
+
 # Forge MCP
 
 [![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-blue)](https://modelcontextprotocol.io)

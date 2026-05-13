@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 64" role="img" aria-label="Hermes Forge">
+  <title>Hermes Forge — The Agent Arena</title>
+  <defs>
+    <linearGradient id="wf-frame" x1="18%" y1="16%" x2="82%" y2="84%">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="50%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="wf-core" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="wf-text" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fafaf9"/>
+      <stop offset="100%" stop-color="#e7e5e4"/>
+    </linearGradient>
+    <filter id="wf-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1.2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Sigil mark (24×24 centered in 44×44 box) -->
+  <g transform="translate(2, 10)" filter="url(#wf-glow)">
+    <!-- Diamond frame -->
+    <path d="M22 4 L38 22 L22 40 L6 22 Z" fill="none" stroke="url(#wf-frame)" stroke-width="2" stroke-linejoin="round"/>
+    <!-- Inner diamond -->
+    <path d="M22 10 L32 22 L22 34 L12 22 Z" fill="none" stroke="url(#wf-frame)" stroke-width="0.9" stroke-linejoin="round" opacity="0.5"/>
+    <!-- Crosshair -->
+    <path d="M22 4 V40 M6 22 H38" fill="none" stroke="url(#wf-frame)" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+    <!-- Center dot -->
+    <circle cx="22" cy="22" r="3.5" fill="url(#wf-core)" opacity="0.9"/>
+    <circle cx="22" cy="22" r="1.2" fill="#0c0a09" opacity="0.85"/>
+  </g>
+
+  <!-- Text: "Hermes Forge" -->
+  <g transform="translate(54, 10)">
+    <!-- Hermes -->
+    <text x="0" y="18" font-family="'DM Sans', 'Inter', system-ui, -apple-system, sans-serif" font-size="18" font-weight="700" fill="url(#wf-text)" letter-spacing="-0.5">Hermes</text>
+    <!-- Forge -->
+    <text x="0" y="40" font-family="'DM Sans', 'Inter', system-ui, -apple-system, sans-serif" font-size="28" font-weight="800" fill="url(#wf-text)" letter-spacing="-0.5">Forge</text>
+    <!-- Tagline -->
+    <text x="0" y="52" font-family="'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace" font-size="7.5" font-weight="400" fill="#a78bfa" letter-spacing="1.5" opacity="0.8">THE AGENT ARENA</text>
+  </g>
+</svg>

@@ -22,8 +22,10 @@
     "forge",
     "ai-agents",
     "model-context-protocol",
-    "hermes-forge"
+    "hermes-forge",
+    "agent-packs"
   ],
+  "author": "JonasAbde",
   "license": "MIT",
   "publishConfig": {
     "access": "public"
