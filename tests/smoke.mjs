@@ -171,7 +171,7 @@ async function main() {
   const toolRes = await sendRequest("tools/list");
   const tools = toolRes.result?.result?.tools;
   check(Array.isArray(tools), "tools is an array");
-  check(tools.length === 12, "exactly 12 tools");
+  check(tools.length === 18, "exactly 18 tools");
 
   const toolNames = tools.map((t) => t.name);
   const expectedTools = [
@@ -187,13 +187,19 @@ async function main() {
     "get_magic_link",
     "forge_agent_traits",
     "forge_agent_lineage",
+    "forge_get_profile",
+    "forge_list_agents",
+    "forge_list_deployments",
+    "forge_list_activities",
+    "forge_list_agent_runs",
+    "forge_search_packs",
   ];
 
   // Exact set match for tool names
   check(
     JSON.stringify([...toolNames].sort()) ===
       JSON.stringify([...expectedTools].sort()),
-    "all 12 tool names exactly match expected set"
+    "all 18 tool names exactly match expected set"
   );
 
   // Individual presence checks (backward compat)

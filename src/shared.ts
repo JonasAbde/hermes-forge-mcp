@@ -240,9 +240,11 @@ export async function forgeFetch<T = unknown>(
       return body as ForgeResponse<T>;
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        throw new Error(
-          `Forge API request timed out after ${FORGE_FETCH_TIMEOUT_MS}ms: ${url}`,
+        logger.warn(
+          "Forge API request timed out",
+          { url, timeoutMs: FORGE_FETCH_TIMEOUT_MS },
         );
+        throw err;
       }
       throw err;
     } finally {
@@ -535,6 +537,117 @@ export function createMCPToolSchemas(
           },
         },
         required: ["agentId"],
+      },
+    },
+    // ── User Profile & Data Tools ──────────────────────────
+    {
+      name: "forge_get_profile",
+      description:
+        "Get the authenticated user's full profile — XP, level, tier, loadout, agent count, fusion count, and subscription status. Requires authentication.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
+      name: "forge_list_agents",
+      description:
+        "List all agents owned by the authenticated user — name, level, XP, rarity, fusion count, pack source. Supports filtering by rarity. Requires authentication.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          rarity: {
+            type: "string",
+            description:
+              "Optional filter by rarity: common, uncommon, rare, epic, legendary",
+          },
+          limit: {
+            type: "integer",
+            description:
+              "Maximum number of agents to return (default: 50)",
+            default: 50,
+          },
+        },
+      },
+    },
+    {
+      name: "forge_list_deployments",
+      description:
+        "List all active Telegram and webhook deployments for the authenticated user. Includes webhook URL, agent ID, status, and creation date. Requires authentication.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          limit: {
+            type: "integer",
+            description:
+              "Maximum number of deployments to return",
+          },
+        },
+      },
+    },
+    {
+      name: "forge_list_activities",
+      description:
+        "List recent activity feed for the authenticated user — missions completed, achievements unlocked, agents fused, packs opened, and other events. Requires authentication.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          limit: {
+            type: "integer",
+            description:
+              "Maximum number of activities to return (default: 20)",
+            default: 20,
+          },
+        },
+      },
+    },
+    {
+      name: "forge_list_agent_runs",
+      description:
+        "List execution history for agents — timestamps, models used, message counts, and status of each run. Requires authentication.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          limit: {
+            type: "integer",
+            description:
+              "Maximum number of runs to return (default: 20)",
+            default: 20,
+          },
+          agentId: {
+            type: "string",
+            description:
+              "Optional filter by agent ID",
+          },
+        },
+      },
+    },
+    {
+      name: "forge_search_packs",
+      description:
+        "Search the full Forge catalog for Agent Packs by keyword. Searches pack names, descriptions, tags, and IDs. No authentication required.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description:
+              "Search keyword to find packs by name, description, tags, or ID",
+          },
+          limit: {
+            type: "integer",
+            description:
+              "Maximum number of results to return (default: 20)",
+            default: 20,
+          },
+          offset: {
+            type: "integer",
+            description:
+              "Number of results to skip for pagination (default: 0)",
+            default: 0,
+          },
+        },
+        required: ["query"],
       },
     },
   ];
@@ -1209,6 +1322,139 @@ export function createToolHandlers(
                   `Ancestors: ${tree.ancestors.length} gen.\n` +
                   `Descendants: ${tree.descendants.length} gen.\n` +
                   `Created: ${tree.createdAt ? new Date(tree.createdAt).toLocaleDateString() : "Unknown"}`,
+              ),
+            ],
+          };
+        }
+
+        // ── forge_get_profile ──────────────────────────────────────
+        case "forge_get_profile": {
+          authFn("forge_get_profile");
+          const data = await fetchFn("/v1/me/profile");
+          const profile = (data as Record<string, unknown>)?.profile as Record<string, unknown> | undefined;
+
+          return {
+            content: [
+              jsonContent(data),
+              textContent(
+                `👤 **Profile Summary**\n` +
+                  `XP Total: ${profile?.xp_total ?? "N/A"}\n` +
+                  `Tier: ${profile?.tier ?? "N/A"}\n` +
+                  `Agents: ${profile?.agent_count ?? "N/A"}\n` +
+                  `Fusions: ${profile?.fusion_count ?? "N/A"}`,
+              ),
+            ],
+          };
+        }
+
+        // ── forge_list_agents ──────────────────────────────────────
+        case "forge_list_agents": {
+          authFn("forge_list_agents");
+          const rarityFilter = args?.rarity ? String(args.rarity).toLowerCase() : "";
+          const limit = Number(args?.limit ?? 50);
+
+          const data = await fetchFn("/v1/agents");
+          const agents = ((data as Record<string, unknown>)?.agents as unknown[] | undefined) ?? (Array.isArray(data) ? data : []);
+
+          let filtered = [...agents];
+          if (rarityFilter) {
+            filtered = filtered.filter((a: unknown) => {
+              const agent = a as Record<string, unknown>;
+              const r = String(agent?.rarity ?? "").toLowerCase();
+              return r === rarityFilter;
+            });
+          }
+          const sliced = filtered.slice(0, limit);
+
+          return {
+            content: [
+              jsonContent(sliced),
+              textContent(
+                `🤖 Found ${sliced.length} agent(s)${rarityFilter ? ` (rarity: ${rarityFilter})` : ""}.`,
+              ),
+            ],
+          };
+        }
+
+        // ── forge_list_deployments ────────────────────────────────
+        case "forge_list_deployments": {
+          authFn("forge_list_deployments");
+          const depLimit = Number(args?.limit ?? 50);
+          const data = await fetchFn("/v1/me/deployments");
+          const deployments = (Array.isArray(data) ? data : (data as Record<string, unknown>)?.deployments as unknown[]) ?? [];
+          const limited = deployments.slice(0, depLimit);
+
+          return {
+            content: [
+              jsonContent(limited),
+              textContent(
+                `🌐 Found ${deployments.length} deployment(s), showing ${limited.length}.`,
+              ),
+            ],
+          };
+        }
+
+        // ── forge_list_activities ──────────────────────────────────
+        case "forge_list_activities": {
+          authFn("forge_list_activities");
+          const actLimit = Number(args?.limit ?? 20);
+          const params = new URLSearchParams();
+          params.set("limit", String(actLimit));
+
+          const data = await fetchFn(`/v1/me/activities?${params.toString()}`);
+
+          return {
+            content: [
+              jsonContent(data),
+              textContent(
+                `📜 Retrieved ${actLimit} recent activities.`,
+              ),
+            ],
+          };
+        }
+
+        // ── forge_list_agent_runs ──────────────────────────────────
+        case "forge_list_agent_runs": {
+          authFn("forge_list_agent_runs");
+          const runsLimit = Number(args?.limit ?? 20);
+          const runsAgentId = args?.agentId ? String(args.agentId) : "";
+
+          const params = new URLSearchParams();
+          params.set("limit", String(runsLimit));
+          if (runsAgentId) params.set("agentId", runsAgentId);
+
+          const data = await fetchFn(`/v1/me/agent-runs?${params.toString()}`);
+
+          return {
+            content: [
+              jsonContent(data),
+              textContent(
+                `⏱️ Retrieved agent run history${runsAgentId ? ` for agent ${runsAgentId}` : ""}.`,
+              ),
+            ],
+          };
+        }
+
+        // ── forge_search_packs ────────────────────────────────────
+        case "forge_search_packs": {
+          const query = String(args?.query ?? "").trim();
+          if (!query) throw new Error("query is required");
+
+          const searchLimit = Number(args?.limit ?? 20);
+          const offset = Number(args?.offset ?? 0);
+
+          const params = new URLSearchParams();
+          params.set("q", query);
+          params.set("limit", String(searchLimit));
+          params.set("offset", String(offset));
+
+          const data = await fetchFn(`/v1/search?${params.toString()}`);
+
+          return {
+            content: [
+              jsonContent(data),
+              textContent(
+                `🔍 Searched for "${query}".`,
               ),
             ],
           };
