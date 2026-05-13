@@ -97,9 +97,6 @@ export const agentsCache = new TTLCache<any>(100, 30_000);
 /** Cache for user profile — TTL 15s */
 export const profileCache = new TTLCache<any>(100, 15_000);
 
-/** Default fallback cache — TTL 30s */
-export const anyCache = new TTLCache<any>(100, 30_000);
-
 // ─── Cache Routing ─────────────────────────────────────────────────────
 
 /**
@@ -125,5 +122,5 @@ export function getCacheForPath(path: string): TTLCache<any> {
   if (path.startsWith("/packs")) return packsCache;
   if (path.startsWith("/v1/agents")) return agentsCache;
   if (path.startsWith("/v1/me")) return profileCache;
-  return anyCache;
+  return agentsCache;
 }
