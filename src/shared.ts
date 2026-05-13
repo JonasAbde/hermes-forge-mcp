@@ -650,6 +650,79 @@ export function createMCPToolSchemas(
         required: ["query"],
       },
     },
+    // ── Mission Tools ──────────────────────────────────────────
+    {
+      name: "forge_list_missions",
+      description:
+        "List all available missions, active mission runs, daily missions, and streak status for the authenticated user. Shows mission IDs needed to start missions, daily rotation, and whether the daily reward has been claimed. Requires authentication.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    {
+      name: "forge_start_mission",
+      description:
+        "Start a mission run with one of your agents. Requires authentication. Use forge_list_missions to find available mission IDs. Requires an agent ID — use forge_list_agents to find your agents.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          missionId: {
+            type: "string",
+            description:
+              "The mission ID to start (e.g., 'training_dummy', 'data_breach', 'code_dungeon', 'inferno_core', 'neural_invasion', 'synthesis_gauntlet', 'the_arena')",
+          },
+          agentId: {
+            type: "string",
+            description:
+              "The ID of the agent to send on this mission",
+          },
+        },
+        required: ["missionId", "agentId"],
+      },
+    },
+    {
+      name: "forge_complete_mission",
+      description:
+        "Complete or fail a mission run. You must provide the run ID obtained from forge_start_mission or forge_list_missions. Mark won=true for success (earns full XP/credits) or won=false for failure (half credits). Logs are optional battle records. Requires authentication.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          missionId: {
+            type: "string",
+            description:
+              "The mission ID being completed",
+          },
+          runId: {
+            type: "string",
+            description:
+              "The mission run ID (returned by forge_start_mission or forge_list_missions)",
+          },
+          won: {
+            type: "boolean",
+            description:
+              "Whether the mission was completed successfully (true) or failed (false). Default: true",
+            default: true,
+          },
+          logs: {
+            type: "array",
+            description:
+              "Optional array of battle log entries (strings)",
+            items: { type: "string" },
+          },
+        },
+        required: ["missionId", "runId"],
+      },
+    },
+    {
+      name: "forge_claim_mission_reward",
+      description:
+        "Claim the daily mission reward. The daily reward is a separate bonus from individual mission rewards (which are auto-awarded on completion). Check forge_list_missions to see if the daily reward is available to claim. Requires authentication.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
   ];
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -1456,6 +1529,146 @@ export function createToolHandlers(
               textContent(
                 `🔍 Searched for "${query}".`,
               ),
+            ],
+          };
+        }
+
+        // ── forge_list_missions ──────────────────────────────────
+        case "forge_list_missions": {
+          authFn("forge_list_missions");
+
+          // Get active mission run
+          const missionsData = await fetchFn("/v1/missions");
+          const activeRun = (missionsData as Record<string, unknown>)?.activeRun ?? null;
+
+          // Get daily missions + streak
+          let dailyData: Record<string, unknown> = {};
+          try {
+            dailyData = (await fetchFn("/v1/missions/daily")) as Record<string, unknown>;
+          } catch {
+            // Daily endpoint may not be available, list what we can
+          }
+
+          const daily = dailyData?.daily ?? null;
+          const claimed = dailyData?.claimed ?? false;
+          const streak = dailyData?.streak ?? null;
+
+          return {
+            content: [
+              jsonContent({
+                activeRun,
+                daily,
+                dailyRewardClaimed: claimed,
+                streak,
+              }),
+              textContent(
+                `🎯 **Missions**\n` +
+                  (activeRun
+                    ? `Active Run: ${(activeRun as Record<string, unknown>).mission_id ?? "unknown"} (status: ${(activeRun as Record<string, unknown>).status ?? "unknown"})\n` +
+                      `  Run ID: ${(activeRun as Record<string, unknown>).id ?? "N/A"}\n`
+                    : `No active mission run.\n`) +
+                  (daily
+                    ? `\nDaily missions: ${((daily as Record<string, unknown>).missionIds as string[] ?? []).join(", ")}\n` +
+                      (() => {
+                        const boss = (daily as Record<string, unknown>).weeklyBossId;
+                        return boss ? `Weekly boss: ${String(boss)}\n` : "";
+                      })() +
+                      `Daily reward claimed: ${claimed ? "Yes ✅" : "No ❌"}\n`
+                    : "") +
+                  (streak
+                    ? `\nDaily streak: ${String((streak as Record<string, unknown>).current ?? 0)} day(s)\n` +
+                      `Best streak: ${String((streak as Record<string, unknown>).best ?? 0)} day(s)`
+                    : ""),
+              ),
+            ],
+          };
+        }
+
+        // ── forge_start_mission ─────────────────────────────────
+        case "forge_start_mission": {
+          authFn("forge_start_mission");
+          const missionId = String(args?.missionId ?? "").trim();
+          const agentId = String(args?.agentId ?? "").trim();
+
+          if (!missionId) throw new Error("missionId is required");
+          if (!agentId) throw new Error("agentId is required");
+
+          const data = await fetchFn(`/v1/missions/${encodeURIComponent(missionId)}/start`, {
+            method: "POST",
+            body: JSON.stringify({ agentId }),
+          });
+
+          const run = (data as Record<string, unknown>)?.run as Record<string, unknown> | undefined;
+
+          return {
+            content: [
+              jsonContent(data),
+              textContent(
+                `🚀 Mission "${missionId}" started with agent ${agentId}!` +
+                  (run?.id ? `\nRun ID: ${String(run.id)}\nUse forge_complete_mission when ready.` : ""),
+              ),
+            ],
+          };
+        }
+
+        // ── forge_complete_mission ──────────────────────────────
+        case "forge_complete_mission": {
+          authFn("forge_complete_mission");
+          const cMissionId = String(args?.missionId ?? "").trim();
+          const runId = String(args?.runId ?? "").trim();
+          const won = args?.won !== false; // default true
+          const logs = Array.isArray(args?.logs) ? args.logs : [];
+
+          if (!cMissionId) throw new Error("missionId is required");
+          if (!runId) throw new Error("runId is required");
+
+          const data = await fetchFn(`/v1/missions/${encodeURIComponent(cMissionId)}/complete`, {
+            method: "POST",
+            body: JSON.stringify({ runId, won, logs }),
+          });
+
+          const xpEarned = (data as Record<string, unknown>)?.xpEarned ?? 0;
+          const creditsEarned = (data as Record<string, unknown>)?.creditsEarned ?? 0;
+          const run = (data as Record<string, unknown>)?.run as Record<string, unknown> | undefined;
+          const status = run?.status as string ?? "completed";
+
+          return {
+            content: [
+              jsonContent(data),
+              textContent(
+                `🎖️ Mission "${cMissionId}" ${status}!\n` +
+                  `XP earned: ${xpEarned}\n` +
+                  `Credits earned: ${creditsEarned}\n` +
+                  (won ? "🎉 Victory!" : "💪 Defeated — try again with a stronger agent!"),
+              ),
+            ],
+          };
+        }
+
+        // ── forge_claim_mission_reward ──────────────────────────
+        case "forge_claim_mission_reward": {
+          authFn("forge_claim_mission_reward");
+
+          const data = await fetchFn("/v1/me/missions/daily/claim", {
+            method: "POST",
+          });
+
+          const rejected = (data as Record<string, unknown>)?.rejected;
+
+          if (rejected) {
+            const reason = (data as Record<string, unknown>)?.reason ?? "Unknown reason";
+            return {
+              content: [
+                jsonContent(data),
+                textContent(`⚠️ Daily reward not available: ${reason}`),
+              ],
+            };
+          }
+
+          return {
+            content: [
+              jsonContent(data),
+              textContent(`🎁 Daily reward claimed! Check your profile for updated XP and credits.`),
             ],
           };
         }

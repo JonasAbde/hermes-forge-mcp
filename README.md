@@ -107,8 +107,20 @@ Read-only endpoints that return structured data from the Forge API.
 | `subscribe_tier` | Yes | Get subscription tier and usage limits |
 | `deploy_agent_to_telegram` | Yes | Deploy an agent to Telegram via webhook |
 | `get_magic_link` | No | Request a magic link for email-based authentication |
+| `forge_get_profile` | Yes | Get full user profile: XP, level, tier, loadout, counts |
+| `forge_list_agents` | Yes | List all owned agents with filtering |
+| `forge_list_deployments` | Yes | List active Telegram/webhook deployments |
+| `forge_list_activities` | Yes | List recent activity feed |
+| `forge_list_agent_runs` | Yes | List agent execution history |
+| `forge_search_packs` | No | Search pack catalog by keyword |
+| `forge_list_missions` | Yes | List available missions, active run, daily missions, and streak |
+| `forge_start_mission` | Yes | Start a mission run with one of your agents |
+| `forge_complete_mission` | Yes | Complete or fail a mission run (awards XP/credits) |
+| `forge_claim_mission_reward` | Yes | Claim the daily mission reward |
 
-**Total: 9 tools.** All mutation tools and authenticated resources require `FORGE_PAT` or `FORGE_API_KEY`. Read-only tools (`forge_list_packs`, `forge_get_pack`, `get_magic_link`) work without auth.
+**Total: 22 tools.** All mutation tools and authenticated resources require `FORGE_PAT` or `FORGE_API_KEY`. Read-only tools (`forge_list_packs`, `forge_get_pack`, `get_magic_link`, `forge_search_packs`) work without auth.
+
+> ⚠️ **Write Operations** — `forge_start_mission`, `forge_complete_mission`, and `forge_claim_mission_reward` affect your Forge account's progression state. XP, credits, agent stats, and daily rewards are real. Use with care.
 
 ### Prompts
 
@@ -141,6 +153,10 @@ Forge MCP proxies the following Hermes Forge API endpoints:
 | `subscribe_tier` | `GET /api/forge/v1/me/tier` | ✅ Live |
 | `deploy_agent_to_telegram` | `POST /api/forge/v1/webhooks` + Telegram API | ✅ Live |
 | `get_magic_link` | `POST /api/forge/v1/auth/magic` | ✅ Live |
+| `forge_list_missions` | `GET /api/forge/v1/missions` + `GET /api/forge/v1/missions/daily` | ✅ Live |
+| `forge_start_mission` | `POST /api/forge/v1/missions/{id}/start` | ✅ Live |
+| `forge_complete_mission` | `POST /api/forge/v1/missions/{id}/complete` | ✅ Live |
+| `forge_claim_mission_reward` | `POST /api/forge/v1/me/missions/daily/claim` | ✅ Live |
 
 All endpoints are verified against the live Forge API at `forge.tekup.dk`. If any endpoint returns unexpected data, the error response will be sanitized (tokens masked) and include actionable information.
 

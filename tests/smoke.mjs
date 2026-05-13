@@ -171,7 +171,7 @@ async function main() {
   const toolRes = await sendRequest("tools/list");
   const tools = toolRes.result?.result?.tools;
   check(Array.isArray(tools), "tools is an array");
-  check(tools.length === 18, "exactly 18 tools");
+  check(tools.length === 22, "exactly 22 tools");
 
   const toolNames = tools.map((t) => t.name);
   const expectedTools = [
@@ -193,6 +193,10 @@ async function main() {
     "forge_list_activities",
     "forge_list_agent_runs",
     "forge_search_packs",
+    "forge_list_missions",
+    "forge_start_mission",
+    "forge_complete_mission",
+    "forge_claim_mission_reward",
   ];
 
   // Exact set match for tool names
