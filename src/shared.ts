@@ -1379,14 +1379,16 @@ export function createToolHandlers(
         // ── forge_list_deployments ────────────────────────────────
         case "forge_list_deployments": {
           authFn("forge_list_deployments");
+          const depLimit = Number(args?.limit ?? 50);
           const data = await fetchFn("/v1/me/deployments");
           const deployments = (Array.isArray(data) ? data : (data as Record<string, unknown>)?.deployments as unknown[]) ?? [];
+          const limited = deployments.slice(0, depLimit);
 
           return {
             content: [
-              jsonContent(data),
+              jsonContent(limited),
               textContent(
-                `🌐 Found ${deployments.length} deployment(s).`,
+                `🌐 Found ${deployments.length} deployment(s), showing ${limited.length}.`,
               ),
             ],
           };
