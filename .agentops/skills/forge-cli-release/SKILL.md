@@ -1,3 +1,11 @@
+---
+name: forge-cli-release
+description: Publish workflow for the forge-mcp npm package
+license: MIT
+metadata:
+  author: AgentOps
+---
+
 # Skill: forge-cli-release
 
 Publish workflow for the forge-mcp npm package.
