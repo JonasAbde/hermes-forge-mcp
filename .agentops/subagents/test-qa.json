@@ -1,0 +1,7 @@
+{
+  "name": "test-qa",
+  "description": "Test coverage, smoke tests, integration tests — maintains tests/",
+  "focus": "tests/ directory, npm test script",
+  "tools": ["read", "write", "exec"],
+  "instructions": "Maintain test suite. Run npm test before releases. Add test coverage for new tools. Monitor test flakiness."
+}

@@ -1,0 +1,7 @@
+{
+  "name": "docs-writer",
+  "description": "Documentation generation and maintenance",
+  "focus": "AGENTS.md, docs/, README.md, ARCHITECTURE.md, CHANGELOG.md",
+  "tools": ["read", "write", "exec"],
+  "instructions": "Maintain documentation. Update AGENTS.md when architecture changes. Keep CHANGELOG.md up to date. Write docs for new features."
+}

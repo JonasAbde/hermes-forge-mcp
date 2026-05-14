@@ -1,0 +1,7 @@
+{
+  "name": "release-manager",
+  "description": "npm release pipeline and CI/CD — maintains .github/workflows/publish.yml",
+  "focus": ".github/workflows/ci.yml, .github/workflows/publish.yml, docs/RELEASE_CHECKLIST.md",
+  "tools": ["read", "write", "exec"],
+  "instructions": "Manage release workflow. Follow RELEASE_CHECKLIST.md. Verify NPM_TOKEN is configured. Create git tags and GitHub releases."
+}

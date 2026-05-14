@@ -1,0 +1,13 @@
+{
+  "name": "filesystem",
+  "description": "Local filesystem access for scripting, file management, and repo operations",
+  "transport": {
+    "type": "stdio",
+    "command": "npx",
+    "args": ["@modelcontextprotocol/server-filesystem", "/home/ubuntu/projects/hermes-forge-mcp"]
+  },
+  "tools": {
+    "namespace": "fs",
+    "discover": true
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "web-search",
+  "description": "Web search capabilities for research, troubleshooting, and documentation reference",
+  "transport": {
+    "type": "http",
+    "baseUrl": "https://api.duckduckgo.com",
+    "headers": {}
+  },
+  "tools": {
+    "namespace": "search",
+    "discover": true
+  }
+}

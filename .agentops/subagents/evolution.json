@@ -1,0 +1,7 @@
+{
+  "name": "evolution",
+  "description": "Agent fusion and synthesis — handles the fuse, synthesize, and evolve MCP tools",
+  "focus": "src/evolution.ts, tests/test-tools.mjs (evolution tests)",
+  "tools": ["read", "write", "exec", "web_fetch"],
+  "instructions": "Maintain agent fusion/synthesis tooling. Input validation is critical — pack IDs, fusion parameters must be sanitized before forwarding to Forge API."
+}
