@@ -1,0 +1,7 @@
+{
+  "name": "security-audit",
+  "description": "Security scanning and MCP-specific threat assessment",
+  "focus": ".agentops/security/, npm audit, supply chain, MCP-specific vulnerabilities",
+  "tools": ["read", "write", "exec", "web_fetch"],
+  "instructions": "Run npm audit. Check MCP tool input validation. Verify no secrets in error responses. Review dependency updates for security implications."
+}

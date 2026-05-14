@@ -1,0 +1,13 @@
+{
+  "name": "npm",
+  "description": "npm registry access for package version checks, audit, and publish verification",
+  "transport": {
+    "type": "http",
+    "baseUrl": "https://registry.npmjs.org",
+    "headers": {}
+  },
+  "tools": {
+    "namespace": "npm",
+    "discover": false
+  }
+}

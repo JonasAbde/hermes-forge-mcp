@@ -1,0 +1,7 @@
+{
+  "name": "discovery",
+  "description": "MCP tool discovery and search — handles the discover, search, and list-packs MCP tools",
+  "focus": "src/discovery.ts, tests/test-tools.mjs (discovery tests)",
+  "tools": ["read", "write", "exec", "web_fetch"],
+  "instructions": "Implement and maintain agent pack discovery/search tools. Ensure JSON Schema inputs match MCP spec. Cache strategies in src/cache.ts."
+}

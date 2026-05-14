@@ -1,0 +1,7 @@
+{
+  "name": "http-server",
+  "description": "HTTP+SSE transport and Express server — maintains src/http-server.ts",
+  "focus": "src/http-server.ts, src/index.ts, tests/test-http.mjs",
+  "tools": ["read", "write", "exec"],
+  "instructions": "Maintain the HTTP+SSE transport layer. Rate limiting, CORS, SSE streaming, error middleware. Ensure compatibility with @modelcontextprotocol/sdk."
+}

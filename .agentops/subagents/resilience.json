@@ -1,0 +1,7 @@
+{
+  "name": "resilience",
+  "description": "Error handling, retries, circuit breaker — maintains src/resilience.ts",
+  "focus": "src/resilience.ts, tests/test-resilience.mjs",
+  "tools": ["read", "write", "exec"],
+  "instructions": "Maintain circuit breaker, retry logic, and fallback mechanisms. All upstream API calls should go through resilience layer."
+}

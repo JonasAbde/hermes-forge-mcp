@@ -1,0 +1,16 @@
+{
+  "name": "github",
+  "description": "GitHub API access for issue tracking, PR management, and repo operations",
+  "transport": {
+    "type": "stdio",
+    "command": "gh",
+    "args": ["mcp"]
+  },
+  "tools": {
+    "namespace": "github",
+    "discover": true
+  },
+  "environment": {
+    "GH_TOKEN": "${GITHUB_TOKEN}"
+  }
+}
