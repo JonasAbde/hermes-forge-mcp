@@ -2,8 +2,7 @@
 name: release-checklist
 description: Verify forge-mcp is ready for npm release
 license: MIT
-metadata:
-  author: AgentOps
+metadata: { "author": "AgentOps" }
 ---
 
 # Skill: release-checklist
