@@ -2,8 +2,7 @@
 name: github-issue-to-pr
 description: Convert a GitHub issue into a properly structured PR for forge-mcp
 license: MIT
-metadata:
-  author: AgentOps
+metadata: { "author": "AgentOps" }
 ---
 
 # Skill: github-issue-to-pr

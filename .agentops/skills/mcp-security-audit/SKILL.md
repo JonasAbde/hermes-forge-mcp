@@ -2,8 +2,7 @@
 name: mcp-security-audit
 description: Security audit specific to MCP protocol implementations
 license: MIT
-metadata:
-  author: AgentOps
+metadata: { "author": "AgentOps" }
 ---
 
 # Skill: mcp-security-audit
