@@ -1,3 +1,11 @@
+---
+name: long-session-protocol
+description: Protocol for managing extended forge-mcp development sessions
+license: MIT
+metadata:
+  author: AgentOps
+---
+
 # Skill: long-session-protocol
 
 Protocol for managing extended forge-mcp development sessions.

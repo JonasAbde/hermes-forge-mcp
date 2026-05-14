@@ -1,3 +1,11 @@
+---
+name: api-contract-review
+description: Review MCP tool schemas and API contracts
+license: MIT
+metadata:
+  author: AgentOps
+---
+
 # Skill: api-contract-review
 
 Review MCP tool schemas and API contracts.
