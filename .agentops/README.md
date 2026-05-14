@@ -6,7 +6,7 @@ This directory defines the **agent operations** layer for the forge-mcp reposito
 
 | Path | Purpose |
 |------|---------|
-| `skills/` | Reusable skill definitions for CLI-driven tasks |
+| `skills/` | Reusable skill definitions (SKILL.md format, auto-discovered by OpenClaw) |
 | `subagents/` | Subagent configurations for automated workflows |
 | `mcp/` | MCP server configurations for tool/service access |
 | `security/` | Security boundaries, blast radius, and guardrails |
