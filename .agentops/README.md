@@ -1,22 +1,19 @@
-# .agentops — Agent Operations for forge-mcp
+# .agentops — Forge MCP
 
-This directory defines the **agent operations** layer for the forge-mcp repository. It provides AI agents (subagents) and their tooling to automate common development and ops tasks specific to running an MCP server.
+> AgentOps for this repo lives in **hermes-forge-ecosystem**.
+> See: https://github.com/JonasAbde/hermes-forge-ecosystem
 
-## Structure
+All skills, subagents, references, and security docs are maintained in the
+ecosystem control plane repo so they apply consistently across platform,
+CLI, MCP, and mobile.
 
-| Path | Purpose |
-|------|---------|
-| `skills/` | Reusable skill definitions (SKILL.md format, auto-discovered by OpenClaw) |
-| `subagents/` | Subagent configurations for automated workflows |
-| `mcp/` | MCP server configurations for tool/service access |
-| `security/` | Security boundaries, blast radius, and guardrails |
+## Quick Start
 
-## MCP Server Context
+1. Read `hermes-forge-ecosystem/.agentops/README.md` — full guide
+2. Load relevant skill from ecosystem `.agentops/skills/<name>/SKILL.md`
+3. Delegate to subagent from ecosystem `.agentops/subagents/<name>.json`
 
-forge-mcp is an npm-published TypeScript package that implements the Model Context Protocol (MCP). It provides a set of MCP tools for discovering, opening, fusing, and deploying AI Agent Packs from the Hermes Forge platform.
+## This Repo's AgentOps
 
-Key differences from the main Forge platform:
-- **No database** — stateless, proxying to the Forge API
-- **Dual transport** — HTTP+SSE and stdio
-- **npm-published** — versioned and released independently
-- **No server restart needed** for config changes (MCP reconnects)
+Only MCP-specific configs that don't apply to the broader ecosystem live here.
+Everything else is in `hermes-forge-ecosystem`. 

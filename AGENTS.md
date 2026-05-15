@@ -89,4 +89,11 @@ Published to npm as `forge-mcp`. See `docs/RELEASE_CHECKLIST.md`.
 
 ### Ops & Recovery
 
-See `DEPLOY.md` for deployment instructions and `CHANGELOG.md` for version history.
+---
+
+## AgentOps
+
+All cross-repo agent orchestration (skills, subagents, references, security)
+lives in **hermes-forge-ecosystem**: https://github.com/JonasAbde/hermes-forge-ecosystem
+
+See `.agentops/README.md` for quick start.
