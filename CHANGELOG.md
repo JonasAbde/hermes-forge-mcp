@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.1.0] — 2026-05-15
+
+### ✨ New Features
+
+- **Mission MCP tools** — New toolset for mission/quest management (#16)
+- **6 new MCP tools** — Expanded tool coverage for agent operations (#15)
+- **Agent evolution** — Conversation tracking + fusion genealogy for lineage visualization
+- **Ecosystem branding** — Social preview, logo, metadata assets
+
+### 🛡️ Resilience & Safety
+
+- **Request timeout** — 15s timeout for all Forge API calls (was hanging indefinitely)
+- **Rate limiting** — Rate limiter applied to HTTP server
+- **Telegram alerts** — Health degradation triggers Telegram notifications
+
+### 🔧 Fixes
+
+- **Model contract alignment** — `chat_with_agent` now correctly passes model parameter
+- **Auth improvements** — Clearer error messages for unauthenticated calls
+- **Code cleanup** — Removed unused code paths
+
+### 🚀 CI/CD
+
+- **GitHub Actions CI pipeline** — Build → test → smoke on push/PR
+- **npm publish workflow** — Auto-publish on version tags
+- **Self-hosted runner support** — Switched to self-hosted runner labels
+
 ## [2.0.0] — 2026-05-12
 
 ### 🚀 Major Improvements

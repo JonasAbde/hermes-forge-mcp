@@ -40,7 +40,7 @@ import logger from "./logger.js";
 const server = new Server(
   {
     name: "forge-mcp",
-    version: "2.0.0",
+    version: "2.1.0",
   },
   {
     capabilities: {

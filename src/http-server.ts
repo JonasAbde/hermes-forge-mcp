@@ -58,7 +58,7 @@ const PORT = parseInt(process.env.MCP_HTTP_PORT ?? "8641", 10);
 const server = new Server(
   {
     name: "hermes-forge-mcp",
-    version: "2.0.0",
+    version: "2.1.0",
   },
   {
     capabilities: {
@@ -144,7 +144,7 @@ app.get("/health", (_req, res) => {
   res.json({
     status: "ok",
     server: "hermes-forge-mcp-http",
-    version: "2.0.0",
+    version: "2.1.0",
     forgeApi: cfg.baseUrl,
     auth: hasAuth() ? "configured" : "not configured",
     health,

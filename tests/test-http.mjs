@@ -121,7 +121,7 @@ async function runTests() {
     assertEqual(health.status, 200, "Health returns 200");
     assertEqual(health.body.status, "ok", 'Health status is "ok"');
     assertEqual(health.body.server, "hermes-forge-mcp-http", "Server name matches");
-    assertEqual(health.body.version, "2.0.0", "Version matches");
+    assertEqual(health.body.version, "2.1.0", "Version matches");
     assertMatch(
       health.body.forgeApi,
       (v) => typeof v === "string",
