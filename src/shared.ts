@@ -18,17 +18,8 @@ import * as crypto from "node:crypto";
 import type {
   ForgeAgent,
   ForgeDeployment,
-  ForgeFusion,
   ForgeChatSession,
-  PaginationMeta,
-  ApiError,
   UserProfile,
-  UserTier,
-  Activity,
-  AgentRun,
-  ForgeChatMessage,
-  MissionRun,
-  PackSubmission,
 } from "@jonasabde/forge-api";
 import {
   validateAndLog,
@@ -50,6 +41,11 @@ import {
   getLineage,
   getFamilyTree,
 } from "./evolution.js";
+import {
+  resolveModel,
+  pollForAssistantResponse,
+  collectStreamChunks,
+} from "./streaming-chat.js";
 
 // ─── ForgeTool Type ───────────────────────────────────────────────────
 
@@ -395,7 +391,13 @@ export function createMCPToolSchemas(
           model: {
             type: "string",
             description:
-              "Optional: the model to use (defaults to the agent's pack model)",
+              "Optional: the model to use (defaults to the agent's pack model). Supports aliases: hermes, hermes3, gpt4o-mini, claude-sonnet, etc.",
+          },
+          stream: {
+            type: "boolean",
+            description:
+              "Optional: if true, uses polling-based streaming to simulate token-by-token chat response. Returns incremental content chunks. Default: false.",
+            default: false,
           },
         },
         required: ["agentId", "message"],
@@ -1006,8 +1008,9 @@ export function createToolHandlers(
             ? String(args.sessionId)
             : undefined;
           const model = args?.model
-            ? String(args.model)
+            ? resolveModel(String(args.model))
             : undefined;
+          const stream = args?.stream === true;
 
           if (!agentId) throw new Error("agentId is required");
           if (!message) throw new Error("message is required");
@@ -1016,13 +1019,14 @@ export function createToolHandlers(
 
           // Create session if not provided
           if (!sid) {
+            const resolvedModel = resolveModel(model);
             const sessionRes = await fetchFn(
               "/v1/chat/sessions",
               {
                 method: "POST",
                 body: JSON.stringify({
                   agentId,
-                  model: model ?? 'hermes-agent',
+                  model: resolvedModel,
                   title: `Chat with ${agentId}`,
                   metadata: {
                     active_pack_ids: [agentId],
@@ -1051,6 +1055,73 @@ export function createToolHandlers(
             },
           );
 
+          // ── Streaming Support ─────────────────────────────────────
+          if (stream) {
+            try {
+              // Poll for assistant response
+              const streamResult = await collectStreamChunks(
+                pollForAssistantResponse(
+                  sid!,
+                  async () => {
+                    const sessionData = await fetchFn(
+                      `/v1/chat/sessions/${sid}`,
+                    );
+                    const sess = (sessionData as Record<string, unknown>)?.session as Record<string, unknown> ?? sessionData;
+                    const messages = (sess?.messages as Array<{ role: string; content: string }>) ?? [];
+                    return { messages };
+                  },
+                  { pollIntervalMs: 1000, maxPollDurationMs: 60000 },
+                ),
+              );
+
+              // ── Evolution: Analyze chat for topic unlocks ─────────
+              let evoMsg = "";
+              try {
+                getOrCreateEvolutionState(agentId);
+                const newTraits = analyzeChat(agentId, message, 1);
+                const evoState = getEvolutionState(agentId);
+
+                if (newTraits.length > 0) {
+                  evoMsg = `\n🧬 **Evolution!** Agent unlocked: ${newTraits.map((t) => t.name).join(", ")}!`;
+                }
+                if (evoState && evoState.traits.length >= 2 && evoState.evolutionStage > 0) {
+                  evoMsg += `\n✨ Evolution Stage: ${evoState.evolutionStage} (${evoState.traits.length} traits unlocked)`;
+                }
+              } catch (evoErr) {
+                logger.warn("Evolution analysis failed", {
+                  error: String(evoErr),
+                });
+              }
+
+              return {
+                content: [
+                  jsonContent({
+                    sessionId: sid,
+                    streamed: true,
+                    content: streamResult.content,
+                    chunks: streamResult.chunks.map((c) => ({
+                      index: c.index,
+                      content: c.content,
+                      done: c.done,
+                      elapsedMs: c.elapsedMs,
+                    })),
+                    totalElapsedMs: streamResult.totalElapsedMs,
+                    message: msgRes,
+                  }),
+                  textContent(
+                    `💬 **Streaming chat complete** — agent ${agentId} (session: ${sid}). 25 XP rewarded!${evoMsg}\n🔄 Streamed ${streamResult.chunks.length} chunks in ${streamResult.totalElapsedMs}ms.`,
+                  ),
+                ],
+              };
+            } catch (streamErr) {
+              logger.warn("Streaming chat failed, falling back to standard mode", {
+                error: String(streamErr),
+              });
+              // Fall through to standard response below
+            }
+          }
+
+          // ── Standard (Non-Streaming) Response ─────────────────────
           // Get session with messages
           const session = await fetchFn(
             `/v1/chat/sessions/${sid}`,
