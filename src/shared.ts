@@ -15,6 +15,21 @@ import {
   GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import * as crypto from "node:crypto";
+import type {
+  ForgeAgent,
+  ForgeDeployment,
+  ForgeFusion,
+  ForgeChatSession,
+  PaginationMeta,
+  ApiError,
+  UserProfile,
+  UserTier,
+  Activity,
+  AgentRun,
+  ForgeChatMessage,
+  MissionRun,
+  PackSubmission,
+} from "@jonasabde/forge-api";
 import {
   validateAndLog,
   exponentialBackoffRetry,
@@ -1018,7 +1033,7 @@ export function createToolHandlers(
             // Platform returns { status: 'ok', session: { id: '...' } }
             const session = (
               sessionRes as Record<string, unknown>
-            )?.session as Record<string, unknown> | undefined;
+            )?.session as ForgeChatSession | undefined;
             sid = (session?.id as string) ?? (
               sessionRes as Record<string, unknown>
             ).id as string;
@@ -1404,17 +1419,16 @@ export function createToolHandlers(
         case "forge_get_profile": {
           authFn("forge_get_profile");
           const data = await fetchFn("/v1/me/profile");
-          const profile = (data as Record<string, unknown>)?.profile as Record<string, unknown> | undefined;
+          const profile = (data as Record<string, unknown>)?.profile as UserProfile | undefined;
 
           return {
             content: [
               jsonContent(data),
               textContent(
                 `👤 **Profile Summary**\n` +
-                  `XP Total: ${profile?.xp_total ?? "N/A"}\n` +
-                  `Tier: ${profile?.tier ?? "N/A"}\n` +
-                  `Agents: ${profile?.agent_count ?? "N/A"}\n` +
-                  `Fusions: ${profile?.fusion_count ?? "N/A"}`,
+                  `Tier: ${profile?.plan ?? "N/A"}\n` +
+                  `Agents: ${profile?.agentCount ?? "N/A"}\n` +
+                  `Fusions: ${profile?.fusionCount ?? "N/A"}`,
               ),
             ],
           };
@@ -1427,13 +1441,12 @@ export function createToolHandlers(
           const limit = Number(args?.limit ?? 50);
 
           const data = await fetchFn("/v1/agents");
-          const agents = ((data as Record<string, unknown>)?.agents as unknown[] | undefined) ?? (Array.isArray(data) ? data : []);
+          const agents = ((data as Record<string, unknown>)?.agents as ForgeAgent[] | undefined) ?? (Array.isArray(data) ? data : []);
 
           let filtered = [...agents];
           if (rarityFilter) {
-            filtered = filtered.filter((a: unknown) => {
-              const agent = a as Record<string, unknown>;
-              const r = String(agent?.rarity ?? "").toLowerCase();
+            filtered = filtered.filter((a: ForgeAgent) => {
+              const r = String(a?.rarity ?? "").toLowerCase();
               return r === rarityFilter;
             });
           }
@@ -1454,7 +1467,7 @@ export function createToolHandlers(
           authFn("forge_list_deployments");
           const depLimit = Number(args?.limit ?? 50);
           const data = await fetchFn("/v1/me/deployments");
-          const deployments = (Array.isArray(data) ? data : (data as Record<string, unknown>)?.deployments as unknown[]) ?? [];
+          const deployments = (Array.isArray(data) ? data : (data as Record<string, unknown>)?.deployments as ForgeDeployment[]) ?? [];
           const limited = deployments.slice(0, depLimit);
 
           return {
