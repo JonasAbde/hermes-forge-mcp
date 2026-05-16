@@ -18,14 +18,26 @@ import { getConfig } from "./shared.js";
 const KNOWN_TOOL_PATHS: Record<string, string[]> = {
   forge_list_packs: ["/packs"],
   forge_get_pack: ["/packs/"],
+  forge_search_packs: ["/packs?search="],
   open_pack: ["/v1/agents"],
+  forge_list_agents: ["/v1/agents"],
+  forge_get_agent: ["/v1/agents/"],
+  forge_agent_traits: ["/v1/agents//traits"],
+  forge_agent_lineage: ["/v1/agents//lineage"],
+  forge_list_agent_runs: ["/v1/agents//runs"],
   chat_with_agent: ["/v1/chat/sessions"],
   fuse_agents: ["/v1/synthesis/fuse"],
-  forge_get_agent: ["/v1/agents/"],
+  forge_list_activities: ["/v1/activities"],
+  forge_list_deployments: ["/v1/deployments"],
   subscribe_tier: ["/v1/me/tier"],
+  forge_get_profile: ["/v1/me/profile", "/v1/me"],
   deploy_agent_to_telegram: ["/v1/webhooks"],
+  forge_list_missions: ["/v1/missions"],
+  forge_start_mission: ["/v1/missions/start"],
+  forge_complete_mission: ["/v1/missions/complete"],
+  forge_claim_mission_reward: ["/v1/missions/claim-daily"],
+  forge_list_leaderboard: ["/packs/leaderboard"],
   get_magic_link: ["/v1/auth/magic"],
-  forge_list_leaderboard: ["/packs"],
 };
 
 // ─── Endpoint Discovery ───────────────────────────────────────────────
@@ -35,12 +47,17 @@ const PROBE_ENDPOINTS = [
   // Pack endpoints
   { method: "GET", path: "/packs", description: "List all Agent Packs" },
   { method: "GET", path: "/packs/{packId}", description: "Get pack details" },
+  { method: "GET", path: "/packs?search=", description: "Search packs" },
+  { method: "GET", path: "/packs/leaderboard", description: "List top packs" },
   // Auth endpoints
   { method: "POST", path: "/v1/auth/magic", description: "Request magic link" },
   // Agent endpoints
   { method: "GET", path: "/v1/agents", description: "List user's agents" },
   { method: "GET", path: "/v1/agents/{agentId}", description: "Get agent details" },
   { method: "POST", path: "/v1/agents", description: "Open/create an agent" },
+  { method: "GET", path: "/v1/agents/{agentId}/traits", description: "Agent personality traits" },
+  { method: "GET", path: "/v1/agents/{agentId}/lineage", description: "Agent fusion lineage" },
+  { method: "GET", path: "/v1/agents/{agentId}/runs", description: "Agent mission runs" },
   // Chat endpoints
   { method: "POST", path: "/v1/chat/sessions", description: "Create chat session" },
   { method: "POST", path: "/v1/chat/sessions/{id}/messages", description: "Send message" },
@@ -50,8 +67,15 @@ const PROBE_ENDPOINTS = [
   { method: "GET", path: "/v1/me", description: "Get current user" },
   { method: "GET", path: "/v1/me/tier", description: "Get subscription tier" },
   { method: "GET", path: "/v1/me/profile", description: "Get user profile" },
+  // Mission endpoints
+  { method: "GET", path: "/v1/missions", description: "List missions" },
+  { method: "POST", path: "/v1/missions/start", description: "Start mission" },
+  { method: "POST", path: "/v1/missions/complete", description: "Complete mission" },
+  { method: "POST", path: "/v1/missions/claim-daily", description: "Claim daily reward" },
   // Webhook endpoints
   { method: "POST", path: "/v1/webhooks", description: "Create webhook" },
+  { method: "GET", path: "/v1/deployments", description: "List deployments" },
+  { method: "GET", path: "/v1/activities", description: "List activities" },
 ];
 
 /**

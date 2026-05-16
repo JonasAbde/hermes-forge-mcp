@@ -11,7 +11,7 @@ through the Forge API.
 │  │  hermes-forge-platform      │  │  hermes-forge-mcp         │ │
 │  │  ├─ Forge Web (React SPA)   │  │  (MCP Server)            │ │
 │  │  │  • Catalog / Collection  │  │  • Port 8641             │ │
-│  │  │  • Forge Chat (route)    │  │  • 7 tools, 3 resources  │ │
+│  │  │  • Forge Chat (route)    │  │  • 21 tools, 3 resources  │ │
 │  │  │  • Arena / Fusion        │  │  • Proxies to Forge API  │ │
 │  │  ├─ Forge API (Node/SQLite) │  │  • systemd service       │ │
 │  │  │  • /api/forge/*          │  └───────────────────────────┘ │
