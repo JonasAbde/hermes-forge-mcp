@@ -14,10 +14,7 @@
   "engines": {
     "node": ">=18"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/JonasAbde/hermes-forge-mcp.git"
-  },
+  "repository": "git+https://github.com/JonasAbde/hermes-forge-mcp.git",
   "bugs": {
     "url": "https://github.com/JonasAbde/hermes-forge-mcp/issues"
   },
