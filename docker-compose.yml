@@ -1,0 +1,20 @@
+# Forge MCP Server — standalone Docker Compose
+# docker compose up --build
+
+services:
+  forge-mcp:
+    build: .
+    ports:
+      - "${MCP_HTTP_PORT:-8641}:8641"
+    environment:
+      - MCP_HTTP_PORT=8641
+      - NODE_ENV=production
+      - FORGE_API_BASE_URL=${FORGE_API_BASE_URL:-https://forge.tekup.dk/api/forge}
+      - FORGE_PAT=${FORGE_PAT:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8641/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
